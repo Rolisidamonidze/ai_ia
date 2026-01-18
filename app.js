@@ -165,6 +165,9 @@ async function getAudioDuration(blob) {
 
 // ffmpeg.wasm: Convert WebM and MP3 to MP4
 async function convertWebMToMP4(webmBlob, audioBlob) {
+    if (typeof FFmpeg === 'undefined') {
+        throw new Error('FFmpeg is not defined. Make sure the FFmpeg script is loaded before app.js in your index.html.');
+    }
     const { createFFmpeg, fetchFile } = FFmpeg;
     const ffmpeg = createFFmpeg({ log: true });
     await ffmpeg.load();
