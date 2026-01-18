@@ -8,13 +8,20 @@
 document.getElementById('apiForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     // Hardcoded API key
-    const apiKey = '';
+    // Get API key from input and store in localStorage
+    const apiKeyInput = document.getElementById('apiKey');
+    const apiKey = apiKeyInput.value.trim();
+    localStorage.setItem('openai_api_key', apiKey);
     const prompt = document.getElementById('prompt').value.trim();
     const status = document.getElementById('status');
     // Hide input and button
     const apiForm = document.getElementById('apiForm');
     apiForm.style.display = 'none';
     status.textContent = 'Fetching response from ChatGPT...';
+    // Restore API key from localStorage if available
+    if (localStorage.getItem('openai_api_key')) {
+        apiKeyInput.value = localStorage.getItem('openai_api_key');
+    }
 
     // Step 1: Fetch text from ChatGPT (OpenAI API)
     let chatText;
