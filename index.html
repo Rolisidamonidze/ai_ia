@@ -11,12 +11,13 @@
     <div class="container">
         <h1>ChatGPT Video Assembler</h1>
         <form id="apiForm">
+            <label for="apiKey">OpenAI API Key:</label>
+            <input type="password" id="apiKey" required>
             <label for="prompt">Prompt:</label>
             <textarea id="prompt" rows="4" required></textarea>
             <button type="submit">Generate Video</button>
         </form>
-                <label for="apiKey">OpenAI API Key:</label>
-                <input type="password" id="apiKey" required>
+          
         <div id="status"></div>
         <div id="progressContainer" style="display:none; margin: 20px 0;">
             <progress id="progressBar" value="0" max="100" style="width:100%; height:24px;"></progress>
