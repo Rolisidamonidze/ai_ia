@@ -7,64 +7,45 @@
 
 document.getElementById('apiForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-    // Hardcoded API key
-    // Get API key from input and store in localStorage
-    const apiKeyInput = document.getElementById('apiKey');
-    const apiKey = apiKeyInput.value.trim();
-    localStorage.setItem('openai_api_key', apiKey);
     const prompt = document.getElementById('prompt').value.trim();
     const status = document.getElementById('status');
-    // Hide input and button
     const apiForm = document.getElementById('apiForm');
     apiForm.style.display = 'none';
-    status.textContent = 'Fetching response from ChatGPT...';
-    // Restore API key from localStorage if available
-    if (localStorage.getItem('openai_api_key')) {
-        apiKeyInput.value = localStorage.getItem('openai_api_key');
-    }
+    status.textContent = 'Fetching response from backend...';
 
-    // Step 1: Fetch text from ChatGPT (OpenAI API)
+    // Step 1: Fetch text from backend
     let chatText;
     try {
-        const chatRes = await fetch('https://api.openai.com/v1/chat/completions', {
+        const chatRes = await fetch('/api/text', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
+                'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                model: 'gpt-3.5-turbo',
-                messages: [{role: 'user', content: prompt}],
-                max_tokens: 200
-            })
+            body: JSON.stringify({ prompt })
         });
         const chatData = await chatRes.json();
-        chatText = chatData.choices?.[0]?.message?.content || '';
+        chatText = chatData.text || chatData.choices?.[0]?.message?.content || '';
     } catch (err) {
-        status.textContent = 'Error fetching text from ChatGPT.';
+        status.textContent = 'Error fetching text from backend.';
+        apiForm.style.display = 'flex';
         return;
     }
     status.textContent = 'Text received. Fetching audio...';
 
-    // Step 2: Fetch audio from OpenAI TTS API
+    // Step 2: Fetch audio from backend
     let audioBlob;
     try {
-        const ttsRes = await fetch('https://api.openai.com/v1/audio/speech', {
+        const ttsRes = await fetch('/api/audio', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
+                'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                model: 'tts-1',
-                input: chatText,
-                voice: 'alloy',
-                response_format: 'mp3'
-            })
+            body: JSON.stringify({ audioInput: chatText })
         });
         audioBlob = await ttsRes.blob();
     } catch (err) {
-        status.textContent = 'Error fetching audio from OpenAI.';
+        status.textContent = 'Error fetching audio from backend.';
+        apiForm.style.display = 'flex';
         return;
     }
     status.textContent = 'Audio received. Assembling video...';
@@ -72,7 +53,6 @@ document.getElementById('apiForm').addEventListener('submit', async function(e) 
     // Step 3: Assemble video (Canvas + Web APIs)
     try {
         const videoBlob = await assembleVideo(chatText, audioBlob);
-        // Convert to MP4
         status.textContent = 'Converting to MP4...';
         const mp4Blob = await convertWebMToMP4(videoBlob, audioBlob);
         const mp4Url = URL.createObjectURL(mp4Blob);
@@ -88,7 +68,6 @@ document.getElementById('apiForm').addEventListener('submit', async function(e) 
         status.textContent = 'Error assembling or converting video.';
         console.error('Video assembly/conversion error:', err);
     }
-    // Show input and button again
     apiForm.style.display = 'flex';
 });
 
