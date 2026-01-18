@@ -8,7 +8,7 @@
 document.getElementById('apiForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     // Hardcoded API key
-    const apiKey = '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';
+    const apiKey = '';
     const prompt = document.getElementById('prompt').value.trim();
     const status = document.getElementById('status');
     // Hide input and button
