@@ -1,0 +1,66 @@
+body {
+    font-family: Arial, sans-serif;
+    background: #f4f4f4;
+    margin: 0;
+    padding: 0;
+}
+.container {
+    max-width: 600px;
+    margin: 40px auto;
+    background: #fff;
+    padding: 32px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+h1 {
+    text-align: center;
+    margin-bottom: 24px;
+}
+form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+label {
+    font-weight: bold;
+}
+input, textarea, button {
+    font-size: 1rem;
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+}
+button {
+    background: #007bff;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+button:hover {
+    background: #0056b3;
+}
+#status {
+    margin-top: 20px;
+    text-align: center;
+    color: #333;
+}
+#outputVideo {
+    margin-top: 24px;
+    width: 100%;
+    border-radius: 8px;
+}
+#downloadLink {
+    display: block;
+    margin: 16px auto;
+    text-align: center;
+    background: #28a745;
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-weight: bold;
+}
+#downloadLink:hover {
+    background: #218838;
+}
