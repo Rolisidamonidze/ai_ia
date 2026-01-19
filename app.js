@@ -140,6 +140,19 @@ if (!backBtn) {
         status.textContent = '';
         backBtn.style.display = 'none';
         
+        // Reset submit button
+        const submitBtn = apiForm.querySelector('button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Generate Content';
+        }
+        
+        // Hide progress container
+        if (progressContainer) {
+            progressContainer.style.display = 'none';
+            progressBar.value = 0;
+        }
+        
         // Hide player components
         const container = document.getElementById('lyricsContainer');
         if (container) container.style.display = 'none';
@@ -158,7 +171,7 @@ if (!backBtn) {
             audio.currentTime = 0;
         }
     };
-    document.body.appendChild(backBtn);
+    // Don't append yet - wait for controls to be created
 }
 
 apiForm.addEventListener('submit', async function(e) {
@@ -256,6 +269,11 @@ apiForm.addEventListener('submit', async function(e) {
         // Show player components
         container.style.display = 'block';
         controls.style.display = 'flex';
+        
+        // Add back button to controls if not already there
+        if (backBtn && !controls.contains(backBtn)) {
+            controls.appendChild(backBtn);
+        }
         
         const wordTimings = await getWordTimings(chatText, audioBlob);
         syncTextWithAudio(chatText, audioBlob, wordTimings, container, controls);
