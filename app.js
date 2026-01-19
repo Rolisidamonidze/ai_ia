@@ -1,3 +1,7 @@
+import { syncTextWithAudio, getWordTimings } from './modules/textSync.js';
+import { getOrCreateLyricsContainer, getOrCreateLyricsControls } from './modules/domUtils.js';
+import { getAudioDuration } from './modules/audioUtils.js';
+import { getOrCreateSidebar, renderSidebar } from './modules/sidebar.js';
 
 // Simplified ChatGPT Video Assembler (WebM only)
 // Requires ffmpeg.wasm loaded in index.html
@@ -115,35 +119,91 @@ function hslToRgb(h, s, l) {
     return [r, g, b];
 }
 
-// ...existing code...
-
-
 // DOM elements
 const apiForm = document.getElementById('apiForm');
 const status = document.getElementById('status');
 const progressContainer = document.getElementById('progressContainer');
 const progressBar = document.getElementById('progressBar');
-const videoEl = document.getElementById('outputVideo');
 const downloadLink = document.getElementById('downloadLink');
+
+// Add a back button for step-by-step UX
+let backBtn = document.getElementById('backBtn');
+if (!backBtn) {
+    backBtn = document.createElement('button');
+    backBtn.id = 'backBtn';
+    backBtn.textContent = '← Back';
+    backBtn.className = 'lyrics-btn';
+    backBtn.style.display = 'none';
+    backBtn.onclick = () => {
+        // Show form again
+        apiForm.style.display = 'flex';
+        status.textContent = '';
+        backBtn.style.display = 'none';
+        
+        // Hide player components
+        const container = document.getElementById('lyricsContainer');
+        if (container) container.style.display = 'none';
+        const controls = document.getElementById('lyricsControls');
+        if (controls) controls.style.display = 'none';
+        
+        // Hide download links
+        if (downloadLink) downloadLink.style.display = 'none';
+        let textDownload = document.getElementById('downloadTextLink');
+        if (textDownload) textDownload.style.display = 'none';
+        
+        // Reset any playing audio
+        const audio = document.querySelector('audio');
+        if (audio) {
+            audio.pause();
+            audio.currentTime = 0;
+        }
+    };
+    document.body.appendChild(backBtn);
+}
 
 apiForm.addEventListener('submit', async function(e) {
     e.preventDefault();
+    
+    const submitBtn = apiForm.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    
+    // Disable form and show loading
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Generating...';
     apiForm.style.display = 'none';
-    status.textContent = 'Fetching response...';
+    status.textContent = 'Initializing...';
     progressContainer.style.display = 'block';
-    progressBar.value = 0;
+    progressBar.value = 10;
 
     try {
         // 1. Get text
         const prompt = document.getElementById('prompt').value.trim();
+        if (!prompt) {
+            throw new Error('Please enter a prompt');
+        }
+        
+        status.textContent = 'Fetching response from ChatGPT...';
+        progressBar.value = 20;
+        
         const chatRes = await fetch('/api/text', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt })
         });
+        
+        if (!chatRes.ok) {
+            throw new Error(`Failed to get text response: ${chatRes.status}`);
+        }
+        
         const chatData = await chatRes.json();
         const chatText = chatData.text || chatData.choices?.[0]?.message?.content || '';
-        status.textContent = 'Text received. Fetching audio...';
+        
+        if (!chatText) {
+            throw new Error('No text received from ChatGPT');
+        }
+        
+        progressBar.value = 50;
+        status.textContent = 'Text received. Generating audio...';
 
         // 2. Get audio
         const ttsRes = await fetch('/api/audio', {
@@ -151,76 +211,97 @@ apiForm.addEventListener('submit', async function(e) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ audioInput: chatText })
         });
+        
+        if (!ttsRes.ok) {
+            throw new Error(`Failed to generate audio: ${ttsRes.status}`);
+        }
+        
         const audioBlob = await ttsRes.blob();
-        status.textContent = 'Audio received. Playing with lyrics...';
+        progressBar.value = 80;
+        status.textContent = 'Audio generated. Setting up playback...';
 
-        // 3. Display text in sync with audio
-        await displayTextWithAudio(chatText, audioBlob);
-        status.textContent = 'Done!';
+        // Save audio locally (show download link)
+        let itemInfo = await saveGeneratedItem(chatText, audioBlob);
+        if (downloadLink) {
+            downloadLink.style.display = '';
+            downloadLink.href = URL.createObjectURL(audioBlob);
+            downloadLink.download = `audio-${itemInfo.idx}.mp3`;
+            downloadLink.textContent = `Download Audio #${itemInfo.idx}`;
+        }
+        
+        // Save text locally (show download link for text)
+        var textDownload = document.getElementById('downloadTextLink');
+        if (!textDownload) {
+            textDownload = document.createElement('a');
+            textDownload.id = 'downloadTextLink';
+            textDownload.className = 'download-link';
+            downloadLink.parentNode.insertBefore(textDownload, downloadLink.nextSibling);
+        }
+        textDownload.style.display = '';
+        textDownload.href = URL.createObjectURL(new Blob([chatText], {type: 'text/plain'}));
+        textDownload.download = `text-${itemInfo.idx}.txt`;
+        textDownload.textContent = `Download Text #${itemInfo.idx}`;
+        
+        progressBar.value = 90;
+        
+        // 3. Display text in sync with audio (word-level)
+        const container = getOrCreateLyricsContainer();
+        const controls = getOrCreateLyricsControls();
+        
+        // Hide form and downloads first
+        apiForm.style.display = 'none';
+        if (downloadLink) downloadLink.style.display = 'none';
+        if (textDownload) textDownload.style.display = 'none';
+        
+        // Show player components
+        container.style.display = 'block';
+        controls.style.display = 'flex';
+        
+        const wordTimings = await getWordTimings(chatText, audioBlob);
+        syncTextWithAudio(chatText, audioBlob, wordTimings, container, controls);
+        
+        progressBar.value = 100;
+        status.textContent = 'Ready to play! Use controls above.';
+        backBtn.style.display = 'block';
+        
+        // Update sidebar
+        await renderSidebar({ apiForm, status, backBtn, downloadLink });
+        
+        // Hide progress after a delay
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+        }, 2000);
+        
     } catch (err) {
+        console.error('Error:', err);
         status.textContent = 'Error: ' + (err.message || err);
-        console.error(err);
+        status.style.background = 'rgba(239, 68, 68, 0.1)';
+        status.style.color = '#dc2626';
+        
+        // Reset form
+        apiForm.style.display = '';
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+        backBtn.style.display = 'none';
+        
+        // Reset status style after delay
+        setTimeout(() => {
+            status.style.background = 'rgba(255, 255, 255, 0.5)';
+            status.style.color = '#4b5563';
+        }, 5000);
+    } finally {
+        // Always reset button state if form is visible
+        if (apiForm.style.display !== 'none') {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+        }
+        
+        // Hide progress if there was an error
+        if (status.textContent.includes('Error')) {
+            progressContainer.style.display = 'none';
+        }
     }
-    progressContainer.style.display = 'none';
-    apiForm.style.display = 'flex';
 });
-
-
-// Display text in sync with audio like a lyrics app
-async function displayTextWithAudio(text, audioBlob) {
-    // Create or get lyrics container
-    let container = document.getElementById('lyricsContainer');
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'lyricsContainer';
-        container.style.font = 'bold 32px Arial';
-        container.style.background = '#222';
-        container.style.color = '#fff';
-        container.style.padding = '40px';
-        container.style.textAlign = 'center';
-        container.style.margin = '20px auto';
-        container.style.width = '80%';
-        container.style.borderRadius = '16px';
-        document.body.appendChild(container);
-    }
-    // Hide video and download elements if present
-    if (videoEl) videoEl.style.display = 'none';
-    if (downloadLink) downloadLink.style.display = 'none';
-
-    // Prepare audio
-    const audio = new Audio();
-    audio.src = URL.createObjectURL(audioBlob);
-
-    // Split text into lines
-    const ctx = document.createElement('canvas').getContext('2d');
-    ctx.font = 'bold 48px Arial';
-    const lines = wrapText(ctx, text, 600);
-
-    // Estimate duration per line
-    const duration = await getAudioDuration(audioBlob);
-    const perLine = duration / lines.length;
-
-    // Display lines in sync with audio
-    let currentLine = 0;
-    container.textContent = '';
-    audio.play();
-
-    function updateLyrics() {
-        const time = audio.currentTime;
-        const newLine = Math.min(Math.floor(time / perLine), lines.length - 1);
-        if (newLine !== currentLine) {
-            currentLine = newLine;
-            container.textContent = lines.slice(0, currentLine + 1).join('\n');
-        }
-        if (!audio.paused && currentLine < lines.length - 1) {
-            requestAnimationFrame(updateLyrics);
-        }
-    }
-    audio.onplay = () => requestAnimationFrame(updateLyrics);
-    audio.onended = () => { container.textContent = lines.join('\n'); };
-    // Optionally auto-scroll to lyrics
-    container.scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
 
 // Mux video and audio into a single WebM using ffmpeg.wasm
 async function muxWebM(videoBlob, audioBlob) {
@@ -288,10 +369,54 @@ function wrapText(ctx, text, maxWidth) {
     lines.push(line.trim());
     return lines;
 }
-async function getAudioDuration(blob) {
-    return new Promise(resolve => {
-        const audio = document.createElement('audio');
-        audio.src = URL.createObjectURL(blob);
-        audio.addEventListener('loadedmetadata', () => resolve(audio.duration));
-    });
+
+// Save item to server
+async function saveGeneratedItem(text, audioBlob) {
+    try {
+        // Convert blob to base64
+        const audioBase64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.readAsDataURL(audioBlob);
+        });
+        
+        const response = await fetch('/api/save-item', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                text, 
+                audioBlob: audioBase64 
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Save failed: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('Item saved successfully:', result.itemId);
+        return { name: result.name, idx: result.itemId };
+        
+    } catch (error) {
+        console.error('Failed to save item:', error);
+        // Fallback to old localStorage method if server fails
+        const items = JSON.parse(localStorage.getItem('generatedItems') || '[]');
+        const idx = items.length + 1;
+        const date = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        const name = `Item ${idx} (${date}) [Local]`;
+        items.push({
+            name,
+            text,
+            audioUrl: URL.createObjectURL(audioBlob),
+            textUrl: URL.createObjectURL(new Blob([text], {type: 'text/plain'})),
+            timestamp: Date.now()
+        });
+        localStorage.setItem('generatedItems', JSON.stringify(items));
+        return { name, idx };
+    }
 }
+
+// On load, render sidebar
+(async () => {
+    await renderSidebar({ apiForm, status, backBtn, downloadLink });
+})();
