@@ -5,10 +5,10 @@
 let currentAudio = null;
 
 /**
- * Synchronize text display with audio playback using word-level timings.
+ * Synchronize text display with audio playback using line-level timings.
  * @param {string} text - The transcript text.
  * @param {Blob} audioBlob - The audio blob.
- * @param {Array} wordTimings - Array of {word, start, end} objects.
+ * @param {Array} wordTimings - Array of {word, start, end} objects (used to calculate line timings).
  * @param {HTMLElement} container - The DOM element to display the text.
  * @param {HTMLElement} [controls] - The controls container (optional, for play/pause)
  * @param {Function} [onEnded] - Callback function when audio ends
@@ -29,45 +29,58 @@ export function syncTextWithAudio(text, audioBlob, wordTimings, container, contr
     audio.mozPreservesPitch = true;
     audio.webkitPreservesPitch = true;
     
-    let currentWordIdx = -1;
+    let currentLineIdx = -1;
     container.innerHTML = '';
     
     // Create a text wrapper for proper inline display
     const textWrapper = document.createElement('div');
     textWrapper.className = 'lyrics-text';
     
-    // Split text into lines and words, preserving line breaks
+    // Split text into lines and calculate line timings
     const lines = text.split('\n');
+    const lineTimings = [];
     
     let wordIndex = 0;
     lines.forEach((line, lineIdx) => {
         const lineDiv = document.createElement('div');
         lineDiv.className = 'lyrics-line';
+        lineDiv.textContent = line;
         
         const words = line.trim().split(/\s+/).filter(w => w.length > 0);
-        words.forEach((word) => {
-            if (wordIndex < wordTimings.length) {
-                const span = document.createElement('span');
-                span.textContent = word + ' ';
-                span.id = 'word-' + wordIndex;
-                span.className = 'lyrics-word';
-                lineDiv.appendChild(span);
-                wordIndex++;
-            }
-        });
+        const wordCount = words.length;
+        
+        // Calculate line timing based on the words in this line
+        if (wordCount > 0 && wordIndex < wordTimings.length) {
+            const startWord = wordIndex;
+            const endWord = Math.min(wordIndex + wordCount - 1, wordTimings.length - 1);
+            lineTimings.push({
+                start: wordTimings[startWord].start,
+                end: wordTimings[endWord].end
+            });
+            wordIndex += wordCount;
+        } else {
+            // Empty line or no timing data
+            lineTimings.push({ start: -1, end: -1 });
+        }
         
         textWrapper.appendChild(lineDiv);
     });
     
     container.appendChild(textWrapper);
-    const spans = Array.from(textWrapper.querySelectorAll('.lyrics-word'));
+    const lineElements = Array.from(textWrapper.querySelectorAll('.lyrics-line'));
     function update() {
         const t = audio.currentTime;
-        let idx = wordTimings.findIndex(({start, end}) => t >= start && t < end);
-        if (idx !== currentWordIdx && idx !== -1) {
-            if (currentWordIdx !== -1) spans[currentWordIdx].classList.remove('active');
-            spans[idx].classList.add('active');
-            currentWordIdx = idx;
+        let idx = lineTimings.findIndex(({start, end}) => t >= start && t < end);
+        if (idx !== currentLineIdx && idx !== -1) {
+            if (currentLineIdx !== -1) lineElements[currentLineIdx].classList.remove('active');
+            lineElements[idx].classList.add('active');
+            currentLineIdx = idx;
+            
+            // Auto-scroll to active line
+            lineElements[idx].scrollIntoView({
+                behavior: 'smooth',
+                block: 'center'
+            });
         }
         if (!audio.paused && idx !== -1) requestAnimationFrame(update);
     }
@@ -79,7 +92,7 @@ export function syncTextWithAudio(text, audioBlob, wordTimings, container, contr
         if (controls) updatePlayPauseBtn(controls, false);
     };
     audio.onended = () => {
-        spans.forEach(s => s.classList.remove('active'));
+        lineElements.forEach(l => l.classList.remove('active'));
         if (controls) updatePlayPauseBtn(controls, false);
         if (onEnded) onEnded();
     };

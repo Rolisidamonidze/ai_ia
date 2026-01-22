@@ -624,7 +624,16 @@ button:hover::before {
 
 .lyrics-line {
     margin-bottom: 0.5rem;
-    padding: 0.25rem 0;
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.lyrics-line.active {
+    background: var(--neon-cyan);
+    color: var(--bg-primary);
+    text-shadow: none;
+    transform: scale(1.02);
 }
 
 .lyrics-word {

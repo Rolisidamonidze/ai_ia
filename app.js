@@ -223,7 +223,7 @@ apiForm.addEventListener('submit', async function(e) {
 
         // Get selected voice
         const voiceSelect = document.getElementById('voiceSelect');
-        const selectedVoice = voiceSelect ? voiceSelect.value : 'alloy';
+        const selectedVoice = voiceSelect ? voiceSelect.value : 'onyx';
 
         // 2. Get audio
         const ttsRes = await fetch('/api/audio', {
