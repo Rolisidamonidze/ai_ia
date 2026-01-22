@@ -341,7 +341,8 @@ app.get('/api/saved-items', async (req, res) => {
           timestamp: metadata.timestamp,
           date: metadata.date,
           textUrl: `/api/saved-file/${metadata.textFile}`,
-          audioUrl: `/api/saved-file/${metadata.audioFile}`
+          audioUrl: `/api/saved-file/${metadata.audioFile}`,
+          playlist: metadata.playlist || 'default'
         });
       } catch (err) {
         console.warn(`Error reading metadata file ${file}:`, err.message);
@@ -357,6 +358,54 @@ app.get('/api/saved-items', async (req, res) => {
     console.error('Load items error:', error);
     res.status(500).json({ 
       error: 'Failed to load saved items', 
+      message: error.message 
+    });
+  }
+});
+
+// Get items grouped by playlist
+app.get('/api/playlists', async (req, res) => {
+  try {
+    const files = await fs.readdir(SAVED_ITEMS_DIR);
+    const jsonFiles = files.filter(f => f.endsWith('.json'));
+    
+    const playlists = {};
+    
+    for (const file of jsonFiles) {
+      try {
+        const content = await fs.readFile(path.join(SAVED_ITEMS_DIR, file), 'utf8');
+        const metadata = JSON.parse(content);
+        const playlistName = metadata.playlist || 'default';
+        
+        if (!playlists[playlistName]) {
+          playlists[playlistName] = [];
+        }
+        
+        playlists[playlistName].push({
+          id: metadata.id,
+          name: metadata.name,
+          timestamp: metadata.timestamp,
+          date: metadata.date,
+          textUrl: `/api/saved-file/${metadata.textFile}`,
+          audioUrl: `/api/saved-file/${metadata.audioFile}`,
+          playlist: playlistName
+        });
+      } catch (err) {
+        console.warn(`Error reading metadata file ${file}:`, err.message);
+      }
+    }
+    
+    // Sort items within each playlist by timestamp
+    Object.keys(playlists).forEach(playlistName => {
+      playlists[playlistName].sort((a, b) => b.timestamp - a.timestamp);
+    });
+    
+    res.json(playlists);
+    
+  } catch (error) {
+    console.error('Load playlists error:', error);
+    res.status(500).json({ 
+      error: 'Failed to load playlists', 
       message: error.message 
     });
   }
@@ -433,6 +482,46 @@ app.delete('/api/saved-item/:itemId', async (req, res) => {
     console.error('Delete item error:', error);
     res.status(500).json({ 
       error: 'Failed to delete item', 
+      message: error.message 
+    });
+  }
+});
+
+// Update item playlist endpoint
+app.patch('/api/saved-item/:itemId/playlist', async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { playlist } = req.body;
+    
+    console.log(`Update playlist for item ${itemId} to: ${playlist}`);
+    
+    if (!itemId) {
+      return res.status(400).json({ error: 'Item ID is required' });
+    }
+    
+    if (!playlist || typeof playlist !== 'string') {
+      return res.status(400).json({ error: 'Playlist name is required' });
+    }
+    
+    const metaPath = path.join(SAVED_ITEMS_DIR, `${itemId}.json`);
+    
+    // Read existing metadata
+    const content = await fs.readFile(metaPath, 'utf8');
+    const metadata = JSON.parse(content);
+    
+    // Update playlist
+    metadata.playlist = playlist;
+    
+    // Write back
+    await fs.writeFile(metaPath, JSON.stringify(metadata, null, 2));
+    
+    console.log(`Successfully updated playlist for item ${itemId}`);
+    res.json({ success: true, itemId, playlist });
+    
+  } catch (error) {
+    console.error('Update playlist error:', error);
+    res.status(500).json({ 
+      error: 'Failed to update playlist', 
       message: error.message 
     });
   }

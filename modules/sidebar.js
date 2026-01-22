@@ -15,91 +15,199 @@ export function getOrCreateSidebar() {
 
 export async function renderSidebar({ apiForm, status, backBtn, downloadLink }) {
     const sidebar = getOrCreateSidebar();
-    sidebar.innerHTML = '<h2>Saved Items</h2>';
+    sidebar.innerHTML = '<h2>Playlists</h2>';
     
     try {
-        // Load items from server first, fallback to localStorage
-        let items = [];
+        // Load playlists grouped by folder
+        let playlists = {};
         try {
-            const response = await fetch('/api/saved-items');
+            const response = await fetch('/api/playlists');
             if (response.ok) {
-                items = await response.json();
+                playlists = await response.json();
             }
         } catch (serverError) {
-            console.warn('Failed to load from server, using localStorage:', serverError);
-            items = JSON.parse(localStorage.getItem('generatedItems') || '[]');
+            console.warn('Failed to load playlists from server:', serverError);
+            // Fallback to localStorage if server fails
+            const items = JSON.parse(localStorage.getItem('generatedItems') || '[]');
+            playlists = { 'default': items };
         }
         
-        if (items.length === 0) {
+        if (Object.keys(playlists).length === 0) {
             sidebar.innerHTML += '<div class="sidebar-empty">No items yet</div>';
             return;
         }
         
-        // Radio mode controls
-        if (items.length > 1) {
-            const radioControls = document.createElement('div');
-            radioControls.className = 'radio-controls';
+        const playlistNames = Object.keys(playlists).sort();
+        
+        // Loop toggle for all playlists
+        const globalControls = document.createElement('div');
+        globalControls.className = 'radio-controls';
+        const loopToggle = document.createElement('label');
+        loopToggle.className = 'loop-toggle';
+        loopToggle.innerHTML = '<input type="checkbox" id="loopMode" checked> <span>Loop</span>';
+        globalControls.appendChild(loopToggle);
+        sidebar.appendChild(globalControls);
+        
+        // Render each playlist as a folder
+        playlistNames.forEach(playlistName => {
+            const items = playlists[playlistName];
+            if (items.length === 0) return;
+            
+            const playlistDiv = document.createElement('div');
+            playlistDiv.className = 'playlist-folder';
+            
+            // Playlist header
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'playlist-header';
+            
+            const toggleBtn = document.createElement('button');
+            toggleBtn.className = 'playlist-toggle';
+            toggleBtn.textContent = '📁';
+            toggleBtn.title = 'Toggle folder';
+            
+            const playlistNameSpan = document.createElement('span');
+            playlistNameSpan.className = 'playlist-name';
+            playlistNameSpan.textContent = playlistName;
+            
+            const itemCount = document.createElement('span');
+            itemCount.className = 'playlist-count';
+            itemCount.textContent = `(${items.length})`;
             
             const playAllBtn = document.createElement('button');
-            playAllBtn.className = 'radio-btn';
-            playAllBtn.textContent = '📻 Play All';
-            playAllBtn.title = 'Play all items in sequence';
-            playAllBtn.onclick = () => startRadioMode(items, { apiForm, status, backBtn, downloadLink });
-            
-            const loopToggle = document.createElement('label');
-            loopToggle.className = 'loop-toggle';
-            loopToggle.innerHTML = '<input type="checkbox" id="loopMode" checked> <span>Loop</span>';
-            
-            radioControls.appendChild(playAllBtn);
-            radioControls.appendChild(loopToggle);
-            sidebar.appendChild(radioControls);
-        }
-        
-        const list = document.createElement('ul');
-        list.className = 'sidebar-list';
-        
-        items.forEach((item, i) => {
-            const li = document.createElement('li');
-            li.className = 'sidebar-item';
-            
-            // Item name
-            const nameDiv = document.createElement('div');
-            nameDiv.className = 'sidebar-item-name';
-            nameDiv.textContent = item.name;
-            li.appendChild(nameDiv);
-            
-            // Button container
-            const btnContainer = document.createElement('div');
-            btnContainer.className = 'sidebar-item-buttons';
-            
-            // Play button
-            const playBtn = document.createElement('button');
-            playBtn.className = 'lyrics-btn';
-            playBtn.textContent = '▶️';
-            playBtn.title = 'Play';
-            playBtn.onclick = () => playItem(item, { apiForm, status, backBtn, downloadLink });
-            btnContainer.appendChild(playBtn);
-            
-            // Delete button
-            const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'lyrics-btn delete-btn';
-            deleteBtn.textContent = '🗑️';
-            deleteBtn.title = 'Delete';
-            deleteBtn.onclick = async (e) => {
+            playAllBtn.className = 'playlist-play-all';
+            playAllBtn.textContent = '▶️';
+            playAllBtn.title = 'Play all in this playlist';
+            playAllBtn.onclick = (e) => {
                 e.stopPropagation();
-                if (confirm(`Delete "${item.name}"?`)) {
-                    await deleteItem(item.id);
+                startRadioMode(items, { apiForm, status, backBtn, downloadLink });
+            };
+            
+            headerDiv.appendChild(toggleBtn);
+            headerDiv.appendChild(playlistNameSpan);
+            headerDiv.appendChild(itemCount);
+            headerDiv.appendChild(playAllBtn);
+            
+            // Make playlist header a drop zone
+            headerDiv.ondragover = (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                headerDiv.classList.add('drag-over');
+            };
+            
+            headerDiv.ondragleave = (e) => {
+                headerDiv.classList.remove('drag-over');
+            };
+            
+            headerDiv.ondrop = async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                headerDiv.classList.remove('drag-over');
+                
+                try {
+                    const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+                    const { itemId, fromPlaylist } = data;
+                    const toPlaylist = playlistName;
+                    
+                    // Don't move if already in this playlist
+                    if (fromPlaylist === toPlaylist) return;
+                    
+                    // Update item playlist via API
+                    const response = await fetch(`/api/saved-item/${itemId}/playlist`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ playlist: toPlaylist })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to move item');
+                    }
+                    
+                    // Refresh sidebar
                     renderSidebar({ apiForm, status, backBtn, downloadLink });
+                    
+                } catch (error) {
+                    console.error('Error moving item:', error);
+                    alert('Failed to move item: ' + error.message);
                 }
             };
-            btnContainer.appendChild(deleteBtn);
             
-            li.appendChild(btnContainer);
+            // Items list (collapsible)
+            const itemsList = document.createElement('ul');
+            itemsList.className = 'playlist-items';
+            itemsList.style.display = 'block'; // Start expanded
             
-            list.appendChild(li);
+            items.forEach((item, i) => {
+                const li = document.createElement('li');
+                li.className = 'sidebar-item';
+                li.draggable = true;
+                li.dataset.itemId = item.id;
+                li.dataset.playlist = playlistName;
+                
+                // Drag start event
+                li.ondragstart = (e) => {
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', JSON.stringify({
+                        itemId: item.id,
+                        fromPlaylist: playlistName
+                    }));
+                    li.classList.add('dragging');
+                };
+                
+                // Drag end event
+                li.ondragend = (e) => {
+                    li.classList.remove('dragging');
+                    document.querySelectorAll('.playlist-header').forEach(h => {
+                        h.classList.remove('drag-over');
+                    });
+                };
+                
+                // Item name
+                const nameDiv = document.createElement('div');
+                nameDiv.className = 'sidebar-item-name';
+                nameDiv.textContent = item.name;
+                li.appendChild(nameDiv);
+                
+                // Button container
+                const btnContainer = document.createElement('div');
+                btnContainer.className = 'sidebar-item-buttons';
+                
+                // Play button
+                const playBtn = document.createElement('button');
+                playBtn.className = 'lyrics-btn';
+                playBtn.textContent = '▶️';
+                playBtn.title = 'Play';
+                playBtn.onclick = () => playItem(item, { apiForm, status, backBtn, downloadLink });
+                btnContainer.appendChild(playBtn);
+                
+                // Delete button
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'lyrics-btn delete-btn';
+                deleteBtn.textContent = '🗑️';
+                deleteBtn.title = 'Delete';
+                deleteBtn.onclick = async (e) => {
+                    e.stopPropagation();
+                    if (confirm(`Delete "${item.name}"?`)) {
+                        await deleteItem(item.id);
+                        renderSidebar({ apiForm, status, backBtn, downloadLink });
+                    }
+                };
+                btnContainer.appendChild(deleteBtn);
+                
+                li.appendChild(btnContainer);
+                itemsList.appendChild(li);
+            });
+            
+            // Toggle folder expansion
+            headerDiv.onclick = () => {
+                const isExpanded = itemsList.style.display === 'block';
+                itemsList.style.display = isExpanded ? 'none' : 'block';
+                toggleBtn.textContent = isExpanded ? '📁' : '📂';
+            };
+            
+            playlistDiv.appendChild(headerDiv);
+            playlistDiv.appendChild(itemsList);
+            sidebar.appendChild(playlistDiv);
         });
-        
-        sidebar.appendChild(list);
         
     } catch (error) {
         console.error('Error rendering sidebar:', error);
