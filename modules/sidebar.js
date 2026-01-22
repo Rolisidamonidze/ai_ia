@@ -39,9 +39,27 @@ export async function renderSidebar({ apiForm, status, backBtn, downloadLink }) 
         
         const playlistNames = Object.keys(playlists).sort();
         
-        // Loop toggle for all playlists
+        // Collect all items from all playlists
+        const allItems = [];
+        playlistNames.forEach(name => {
+            allItems.push(...playlists[name]);
+        });
+        
+        // Global controls with loop toggle and play all button
         const globalControls = document.createElement('div');
         globalControls.className = 'radio-controls';
+        
+        const playAllBtn = document.createElement('button');
+        playAllBtn.className = 'global-play-all';
+        playAllBtn.textContent = '▶️ Play All';
+        playAllBtn.title = 'Play all items from all playlists';
+        playAllBtn.onclick = () => {
+            if (allItems.length > 0) {
+                startRadioMode(allItems, { apiForm, status, backBtn, downloadLink });
+            }
+        };
+        globalControls.appendChild(playAllBtn);
+        
         const loopToggle = document.createElement('label');
         loopToggle.className = 'loop-toggle';
         loopToggle.innerHTML = '<input type="checkbox" id="loopMode" checked> <span>Loop</span>';
@@ -295,9 +313,9 @@ async function playRadioItem(index, context) {
         status.textContent = `Radio: Playing ${index + 1}/${radioPlaylist.length} - ${item.name}`;
         backBtn.style.display = 'block';
         
-        // Highlight current item in sidebar
-        document.querySelectorAll('.sidebar-item').forEach((el, i) => {
-            if (i === index) {
+        // Highlight current item in sidebar by matching data-item-id
+        document.querySelectorAll('.sidebar-item').forEach((el) => {
+            if (el.dataset.itemId === item.id) {
                 el.classList.add('playing');
             } else {
                 el.classList.remove('playing');
