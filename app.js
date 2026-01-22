@@ -1,7 +1,7 @@
 import { syncTextWithAudio, getWordTimings } from './modules/textSync.js';
 import { getOrCreateLyricsContainer, getOrCreateLyricsControls } from './modules/domUtils.js';
 import { getAudioDuration } from './modules/audioUtils.js';
-import { getOrCreateSidebar, renderSidebar } from './modules/sidebar.js';
+import { getOrCreateSidebar, renderSidebar, stopRadioMode } from './modules/sidebar.js';
 
 // Simplified ChatGPT Video Assembler (WebM only)
 // Requires ffmpeg.wasm loaded in index.html
@@ -135,6 +135,9 @@ if (!backBtn) {
     backBtn.className = 'lyrics-btn';
     backBtn.style.display = 'none';
     backBtn.onclick = () => {
+        // Stop radio mode if active
+        stopRadioMode();
+        
         // Show form again
         apiForm.style.display = 'flex';
         status.textContent = '';
@@ -218,11 +221,18 @@ apiForm.addEventListener('submit', async function(e) {
         progressBar.value = 50;
         status.textContent = 'Text received. Generating audio...';
 
+        // Get selected voice
+        const voiceSelect = document.getElementById('voiceSelect');
+        const selectedVoice = voiceSelect ? voiceSelect.value : 'alloy';
+
         // 2. Get audio
         const ttsRes = await fetch('/api/audio', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ audioInput: chatText })
+            body: JSON.stringify({ 
+                audioInput: chatText,
+                voice: selectedVoice 
+            })
         });
         
         if (!ttsRes.ok) {
@@ -422,13 +432,18 @@ async function saveGeneratedItem(text, audioBlob) {
             reader.readAsDataURL(audioBlob);
         });
         
+        // Get playlist from form
+        const playlistInput = document.getElementById('playlistInput');
+        const playlist = playlistInput ? playlistInput.value.trim() : '';
+        
         const response = await fetch('/api/save-item', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 text, 
                 audioBlob: audioBase64,
-                title 
+                title,
+                playlist: playlist || 'default'
             })
         });
         

@@ -72,10 +72,16 @@ app.post('/api/text', async (req, res) => {
       },
       body: JSON.stringify({
         model: 'gpt-3.5-turbo',
-        messages: [{ 
-          role: 'user', 
-          content: prompt 
-        }],
+        messages: [
+          { 
+            role: 'system', 
+            content: 'When generating affirmations or similar content, do not use numbered lists or bullet points. Write each statement on a new line without any numbering, bullets, or other markers. Just write the affirmations naturally, one per line.'
+          },
+          { 
+            role: 'user', 
+            content: prompt 
+          }
+        ],
         max_tokens: 200,
         temperature: 0.7
       })
@@ -112,7 +118,7 @@ app.post('/api/text', async (req, res) => {
 // Audio endpoint (OpenAI TTS)
 app.post('/api/audio', async (req, res) => {
   try {
-    const { audioInput } = req.body;
+    const { audioInput, voice } = req.body;
     
     if (!audioInput || typeof audioInput !== 'string' || audioInput.trim().length === 0) {
       return res.status(400).json({ error: 'audioInput is required and must be a non-empty string' });
@@ -120,7 +126,11 @@ app.post('/api/audio', async (req, res) => {
 
     const apiKey = validateApiKey();
     
-    console.log(`Generating audio for text: "${audioInput.substring(0, 50)}${audioInput.length > 50 ? '...' : ''}"`);
+    // Validate voice or use default
+    const validVoices = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
+    const selectedVoice = validVoices.includes(voice) ? voice : 'alloy';
+    
+    console.log(`Generating audio for text: "${audioInput.substring(0, 50)}${audioInput.length > 50 ? '...' : ''}" with voice: ${selectedVoice}`);
     
     const response = await fetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
@@ -131,7 +141,7 @@ app.post('/api/audio', async (req, res) => {
       body: JSON.stringify({
         model: 'tts-1',
         input: audioInput,
-        voice: 'alloy',
+        voice: selectedVoice,
         response_format: 'mp3'
       })
     });
@@ -240,7 +250,7 @@ app.post('/api/generate-title', async (req, res) => {
 // Save generated item endpoint
 app.post('/api/save-item', async (req, res) => {
   try {
-    const { text, audioBlob, title } = req.body;
+    const { text, audioBlob, title, playlist } = req.body;
     
     if (!text || !audioBlob) {
       return res.status(400).json({ error: 'Text and audioBlob are required' });
@@ -295,7 +305,8 @@ app.post('/api/save-item', async (req, res) => {
       timestamp,
       date,
       textFile: `${itemId}.txt`,
-      audioFile: `${itemId}.mp3`
+      audioFile: `${itemId}.mp3`,
+      playlist: playlist || 'default'
     };
     
     const metaPath = path.join(SAVED_ITEMS_DIR, `${itemId}.json`);
@@ -378,6 +389,52 @@ app.get('/api/saved-file/:filename', async (req, res) => {
   } catch (error) {
     console.error('Serve file error:', error);
     res.status(404).json({ error: 'File not found' });
+  }
+});
+
+// Delete item endpoint
+app.delete('/api/saved-item/:itemId', async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    
+    console.log(`Delete request for item: ${itemId}`);
+    
+    if (!itemId) {
+      return res.status(400).json({ error: 'Item ID is required' });
+    }
+    
+    const metaPath = path.join(SAVED_ITEMS_DIR, `${itemId}.json`);
+    const textPath = path.join(SAVED_ITEMS_DIR, `${itemId}.txt`);
+    const audioPath = path.join(SAVED_ITEMS_DIR, `${itemId}.mp3`);
+    
+    console.log(`Deleting files for ${itemId}:`, { metaPath, textPath, audioPath });
+    
+    // Delete all files for this item
+    const results = await Promise.allSettled([
+      fs.unlink(metaPath),
+      fs.unlink(textPath),
+      fs.unlink(audioPath)
+    ]);
+    
+    // Log which files were deleted
+    results.forEach((result, i) => {
+      const files = [metaPath, textPath, audioPath];
+      if (result.status === 'fulfilled') {
+        console.log(`Deleted: ${files[i]}`);
+      } else {
+        console.warn(`Failed to delete ${files[i]}:`, result.reason?.message);
+      }
+    });
+    
+    console.log(`Successfully processed delete for item ${itemId}`);
+    res.json({ success: true, itemId });
+    
+  } catch (error) {
+    console.error('Delete item error:', error);
+    res.status(500).json({ 
+      error: 'Failed to delete item', 
+      message: error.message 
+    });
   }
 });
 

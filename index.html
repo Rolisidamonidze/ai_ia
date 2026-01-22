@@ -16,6 +16,20 @@
             <form id="apiForm">
                 <label for="prompt">Prompt:</label>
                 <textarea id="prompt" rows="4" required placeholder="Enter your prompt to generate text and audio..."></textarea>
+                
+                <label for="voiceSelect">Voice:</label>
+                <select id="voiceSelect">
+                    <option value="alloy">Alloy (Neutral)</option>
+                    <option value="echo">Echo (Male)</option>
+                    <option value="fable">Fable (British Male)</option>
+                    <option value="onyx">Onyx (Deep Male)</option>
+                    <option value="nova">Nova (Female)</option>
+                    <option value="shimmer">Shimmer (Soft Female)</option>
+                </select>
+                
+                <label for="playlistInput">Playlist (optional):</label>
+                <input type="text" id="playlistInput" placeholder="Enter playlist name or leave empty for default">
+                
                 <button type="submit">Generate Content</button>
             </form>
             

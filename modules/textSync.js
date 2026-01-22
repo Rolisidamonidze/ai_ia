@@ -11,8 +11,9 @@ let currentAudio = null;
  * @param {Array} wordTimings - Array of {word, start, end} objects.
  * @param {HTMLElement} container - The DOM element to display the text.
  * @param {HTMLElement} [controls] - The controls container (optional, for play/pause)
+ * @param {Function} [onEnded] - Callback function when audio ends
  */
-export function syncTextWithAudio(text, audioBlob, wordTimings, container, controls) {
+export function syncTextWithAudio(text, audioBlob, wordTimings, container, controls, onEnded) {
     // Pause any currently playing audio
     if (currentAudio && !currentAudio.paused) {
         currentAudio.pause();
@@ -22,6 +23,11 @@ export function syncTextWithAudio(text, audioBlob, wordTimings, container, contr
     const audio = new Audio();
     audio.src = URL.createObjectURL(audioBlob);
     currentAudio = audio;  // Set as the currently active audio
+    
+    // Enable pitch preservation to avoid chipmunk/deep voice effects
+    audio.preservesPitch = true;
+    audio.mozPreservesPitch = true;
+    audio.webkitPreservesPitch = true;
     
     let currentWordIdx = -1;
     container.innerHTML = '';
@@ -75,6 +81,7 @@ export function syncTextWithAudio(text, audioBlob, wordTimings, container, contr
     audio.onended = () => {
         spans.forEach(s => s.classList.remove('active'));
         if (controls) updatePlayPauseBtn(controls, false);
+        if (onEnded) onEnded();
     };
     if (controls) {
         const btn = controls.querySelector('.lyrics-btn');
