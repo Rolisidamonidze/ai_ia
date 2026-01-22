@@ -12,5 +12,8 @@ yarn-error.log*
 # Env files
 .env
 
+# Saved items
+saved-items/
+
 # Others
 *.log

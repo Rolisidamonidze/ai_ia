@@ -226,9 +226,9 @@ button {
     color: var(--bg-primary);
     cursor: pointer;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 1rem;
+    font-size: 0.85rem;
     font-weight: 700;
-    padding: 1rem 2rem;
+    padding: 0.6rem 1.2rem;
     text-transform: uppercase;
     letter-spacing: 1px;
     transition: all 0.3s ease;
@@ -331,10 +331,10 @@ button:hover::before {
     color: var(--text-accent);
     display: inline-block;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 1rem;
+    font-size: 0.85rem;
     font-weight: 700;
     margin: 1rem 0;
-    padding: 1rem 2rem;
+    padding: 0.6rem 1.2rem;
     text-decoration: none;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -416,13 +416,12 @@ button:hover::before {
 .lyrics-btn {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
-    border-radius: 50%;
+    border-radius: 4px;
     color: var(--neon-cyan);
     cursor: pointer;
-    font-size: 1.2rem;
-    height: 50px;
+    font-size: 1rem;
+    padding: 0.5rem 0.75rem;
     transition: all 0.3s ease;
-    width: 50px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -445,9 +444,9 @@ button:hover::before {
     border: 1px solid var(--border-color);
     border-radius: 8px;
     color: var(--neon-cyan);
-    padding: 0.75rem 1.5rem;
+    padding: 0.5rem 1rem;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     font-weight: 400;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -534,8 +533,8 @@ button:hover::before {
     }
     
     button, .download-link, #downloadLink {
-        padding: 0.75rem 1.5rem;
-        font-size: 0.9rem;
+        padding: 0.5rem 1rem;
+        font-size: 0.8rem;
     }
 }
 

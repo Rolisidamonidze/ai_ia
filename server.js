@@ -170,18 +170,27 @@ app.post('/api/save-item', async (req, res) => {
       return res.status(400).json({ error: 'Text and audioBlob are required' });
     }
 
+    // Ensure directory exists
+    await ensureSavedItemsDir();
+
     const timestamp = Date.now();
     const date = new Date(timestamp).toISOString().slice(0, 19).replace('T', ' ');
     const itemId = `item_${timestamp}`;
     
+    console.log(`Saving item ${itemId}...`);
+    
     // Save text file
     const textPath = path.join(SAVED_ITEMS_DIR, `${itemId}.txt`);
     await fs.writeFile(textPath, text, 'utf8');
+    console.log(`Text saved: ${textPath}`);
     
     // Save audio file (convert base64 to binary)
-    const audioBuffer = Buffer.from(audioBlob.replace('data:audio/mpeg;base64,', ''), 'base64');
+    // Extract base64 data after the comma (handles any data URL format)
+    const base64Data = audioBlob.includes(',') ? audioBlob.split(',')[1] : audioBlob;
+    const audioBuffer = Buffer.from(base64Data, 'base64');
     const audioPath = path.join(SAVED_ITEMS_DIR, `${itemId}.mp3`);
     await fs.writeFile(audioPath, audioBuffer);
+    console.log(`Audio saved: ${audioPath}`);
     
     // Save metadata
     const metadata = {

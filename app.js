@@ -234,6 +234,7 @@ apiForm.addEventListener('submit', async function(e) {
         status.textContent = 'Audio generated. Setting up playback...';
 
         // Save audio locally (show download link)
+        status.textContent = 'Saving files...';
         let itemInfo = await saveGeneratedItem(chatText, audioBlob);
         if (downloadLink) {
             downloadLink.style.display = '';
