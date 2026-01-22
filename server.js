@@ -82,7 +82,7 @@ app.post('/api/text', async (req, res) => {
             content: prompt 
           }
         ],
-        max_tokens: 200,
+        max_tokens: 2000,
         temperature: 0.7
       })
     });
