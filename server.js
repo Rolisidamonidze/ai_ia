@@ -268,8 +268,24 @@ app.post('/api/save-item', async (req, res) => {
     await fs.writeFile(audioPath, audioBuffer);
     console.log(`Audio saved: ${audioPath}`);
     
-    // Use provided title or fallback to generic name
-    const itemName = title || `Generated Content (${date})`;
+    // Use provided title or create a better fallback based on text content
+    let itemName = title;
+    if (!itemName) {
+      // Create a descriptive fallback from first few words
+      const words = text.trim().split(/\s+/).slice(0, 6);
+      const preview = words.join(' ');
+      itemName = preview.length > 50 ? preview.substring(0, 50) + '...' : preview;
+      
+      // If still too short or generic, add date
+      if (itemName.length < 10) {
+        itemName = `Content from ${new Date(timestamp).toLocaleString('en-US', { 
+          month: 'short', 
+          day: 'numeric', 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        })}`;
+      }
+    }
     
     // Save metadata
     const metadata = {

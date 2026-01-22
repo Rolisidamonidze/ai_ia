@@ -234,10 +234,10 @@ apiForm.addEventListener('submit', async function(e) {
         status.textContent = 'Audio generated. Setting up playback...';
 
         // Save audio locally (non-blocking - happens in background)
-        saveGeneratedItem(chatText, audioBlob).then(itemInfo => {
+        saveGeneratedItem(chatText, audioBlob).then(async itemInfo => {
             console.log('Item saved with title:', itemInfo.name);
             // Update sidebar after save completes
-            renderSidebar({ apiForm, status, backBtn, downloadLink });
+            await renderSidebar({ apiForm, status, backBtn, downloadLink });
         }).catch(err => {
             console.error('Background save failed:', err);
         });
@@ -289,9 +289,6 @@ apiForm.addEventListener('submit', async function(e) {
         progressBar.value = 100;
         status.textContent = 'Ready to play! Use controls above.';
         backBtn.style.display = 'block';
-        
-        // Update sidebar
-        await renderSidebar({ apiForm, status, backBtn, downloadLink });
         
         // Hide progress after a delay
         setTimeout(() => {
