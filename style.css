@@ -435,11 +435,6 @@ button:hover::before {
 
 /* Back Button Positioning */
 #backBtn {
-    position: absolute;
-    left: -80px;
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 1000;
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -452,15 +447,12 @@ button:hover::before {
     transition: all 0.3s ease;
     text-transform: uppercase;
     letter-spacing: 1px;
-    height: auto;
-    width: auto;
 }
 
 #backBtn:hover {
     border-color: var(--neon-cyan);
     background: rgba(0, 255, 255, 0.1);
     box-shadow: 0 0 15px rgba(0, 255, 255, 0.4);
-    transform: translateY(-50%) translateX(-2px);
 }
 
 .lyrics-controls {

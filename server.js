@@ -161,10 +161,86 @@ app.post('/api/audio', async (req, res) => {
   }
 });
 
+// Generate title endpoint (using GPT)
+app.post('/api/generate-title', async (req, res) => {
+  try {
+    const { text } = req.body;
+    
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+
+    const apiKey = validateApiKey();
+    
+    // Create a better prompt for generating a natural, human-readable title
+    const prompt = `Based on the following text, create a short, natural, and descriptive title (3-8 words maximum). The title should capture the main theme or topic. Do not use quotes. Return ONLY the title:\n\n${text.substring(0, 600)}`;
+    
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { 
+            role: 'system', 
+            content: 'You are a title generator. Create short, natural, human-readable titles that capture the essence of the text. Never use quotes or generic phrases like "Generated Content".' 
+          },
+          { 
+            role: 'user', 
+            content: prompt 
+          }
+        ],
+        max_tokens: 30,
+        temperature: 0.8
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      console.error('OpenAI API error for title:', data);
+      // Fallback to a timestamp-based title if API fails
+      const date = new Date().toLocaleString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+      return res.json({ title: `Content from ${date}` });
+    }
+    
+    let title = data.choices?.[0]?.message?.content?.trim() || '';
+    
+    // Clean up the title
+    title = title.replace(/^["']|["']$/g, '');  // Remove quotes
+    title = title.replace(/^Title:\s*/i, '');    // Remove "Title:" prefix
+    title = title.replace(/\.$/, '');             // Remove trailing period
+    
+    // If title is too generic or empty, create a descriptive one
+    if (!title || title.length < 3 || title.toLowerCase().includes('generated content')) {
+      const firstWords = text.trim().split(/\s+/).slice(0, 5).join(' ');
+      title = firstWords.length > 40 ? firstWords.substring(0, 40) + '...' : firstWords;
+    }
+    
+    console.log('Title generated:', title);
+    res.json({ title });
+    
+  } catch (error) {
+    console.error('Generate title error:', error);
+    // Fallback to first few words of the text
+    const firstWords = req.body.text?.trim().split(/\s+/).slice(0, 5).join(' ') || 'Untitled';
+    const fallbackTitle = firstWords.length > 40 ? firstWords.substring(0, 40) + '...' : firstWords;
+    res.json({ title: fallbackTitle });
+  }
+});
+
 // Save generated item endpoint
 app.post('/api/save-item', async (req, res) => {
   try {
-    const { text, audioBlob } = req.body;
+    const { text, audioBlob, title } = req.body;
     
     if (!text || !audioBlob) {
       return res.status(400).json({ error: 'Text and audioBlob are required' });
@@ -192,10 +268,13 @@ app.post('/api/save-item', async (req, res) => {
     await fs.writeFile(audioPath, audioBuffer);
     console.log(`Audio saved: ${audioPath}`);
     
+    // Use provided title or fallback to generic name
+    const itemName = title || `Generated Content (${date})`;
+    
     // Save metadata
     const metadata = {
       id: itemId,
-      name: `Generated Content (${date})`,
+      name: itemName,
       text,
       timestamp,
       date,

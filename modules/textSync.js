@@ -1,6 +1,9 @@
 // Text-audio synchronization module
 // Exports: syncTextWithAudio, getWordTimings
 
+// Global reference to currently playing audio
+let currentAudio = null;
+
 /**
  * Synchronize text display with audio playback using word-level timings.
  * @param {string} text - The transcript text.
@@ -10,8 +13,16 @@
  * @param {HTMLElement} [controls] - The controls container (optional, for play/pause)
  */
 export function syncTextWithAudio(text, audioBlob, wordTimings, container, controls) {
+    // Pause any currently playing audio
+    if (currentAudio && !currentAudio.paused) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+    }
+    
     const audio = new Audio();
     audio.src = URL.createObjectURL(audioBlob);
+    currentAudio = audio;  // Set as the currently active audio
+    
     let currentWordIdx = -1;
     container.innerHTML = '';
     
@@ -19,17 +30,31 @@ export function syncTextWithAudio(text, audioBlob, wordTimings, container, contr
     const textWrapper = document.createElement('div');
     textWrapper.className = 'lyrics-text';
     
-    // Create spans for each word
-    wordTimings.forEach(({word}, i) => {
-        const span = document.createElement('span');
-        span.textContent = word + ' ';
-        span.id = 'word-' + i;
-        span.className = 'lyrics-word';
-        textWrapper.appendChild(span);
+    // Split text into lines and words, preserving line breaks
+    const lines = text.split('\n');
+    
+    let wordIndex = 0;
+    lines.forEach((line, lineIdx) => {
+        const lineDiv = document.createElement('div');
+        lineDiv.className = 'lyrics-line';
+        
+        const words = line.trim().split(/\s+/).filter(w => w.length > 0);
+        words.forEach((word) => {
+            if (wordIndex < wordTimings.length) {
+                const span = document.createElement('span');
+                span.textContent = word + ' ';
+                span.id = 'word-' + wordIndex;
+                span.className = 'lyrics-word';
+                lineDiv.appendChild(span);
+                wordIndex++;
+            }
+        });
+        
+        textWrapper.appendChild(lineDiv);
     });
     
     container.appendChild(textWrapper);
-    const spans = Array.from(textWrapper.children);
+    const spans = Array.from(textWrapper.querySelectorAll('.lyrics-word'));
     function update() {
         const t = audio.currentTime;
         let idx = wordTimings.findIndex(({start, end}) => t >= start && t < end);

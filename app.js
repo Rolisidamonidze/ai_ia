@@ -233,14 +233,21 @@ apiForm.addEventListener('submit', async function(e) {
         progressBar.value = 80;
         status.textContent = 'Audio generated. Setting up playback...';
 
-        // Save audio locally (show download link)
-        status.textContent = 'Saving files...';
-        let itemInfo = await saveGeneratedItem(chatText, audioBlob);
+        // Save audio locally (non-blocking - happens in background)
+        saveGeneratedItem(chatText, audioBlob).then(itemInfo => {
+            console.log('Item saved with title:', itemInfo.name);
+            // Update sidebar after save completes
+            renderSidebar({ apiForm, status, backBtn, downloadLink });
+        }).catch(err => {
+            console.error('Background save failed:', err);
+        });
+        
+        const timestamp = Date.now();
         if (downloadLink) {
             downloadLink.style.display = '';
             downloadLink.href = URL.createObjectURL(audioBlob);
-            downloadLink.download = `audio-${itemInfo.idx}.mp3`;
-            downloadLink.textContent = `Download Audio #${itemInfo.idx}`;
+            downloadLink.download = `audio-${timestamp}.mp3`;
+            downloadLink.textContent = `Download Audio`;
         }
         
         // Save text locally (show download link for text)
@@ -253,8 +260,8 @@ apiForm.addEventListener('submit', async function(e) {
         }
         textDownload.style.display = '';
         textDownload.href = URL.createObjectURL(new Blob([chatText], {type: 'text/plain'}));
-        textDownload.download = `text-${itemInfo.idx}.txt`;
-        textDownload.textContent = `Download Text #${itemInfo.idx}`;
+        textDownload.download = `text-${timestamp}.txt`;
+        textDownload.textContent = `Download Text`;
         
         progressBar.value = 90;
         
@@ -392,6 +399,25 @@ function wrapText(ctx, text, maxWidth) {
 // Save item to server
 async function saveGeneratedItem(text, audioBlob) {
     try {
+        // Generate title using GPT
+        let title = null;
+        try {
+            console.log('Generating title...');
+            const titleResponse = await fetch('/api/generate-title', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text })
+            });
+            
+            if (titleResponse.ok) {
+                const titleData = await titleResponse.json();
+                title = titleData.title;
+                console.log('Generated title:', title);
+            }
+        } catch (titleError) {
+            console.warn('Failed to generate title, using default:', titleError);
+        }
+        
         // Convert blob to base64
         const audioBase64 = await new Promise((resolve) => {
             const reader = new FileReader();
@@ -404,7 +430,8 @@ async function saveGeneratedItem(text, audioBlob) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 text, 
-                audioBlob: audioBase64 
+                audioBlob: audioBase64,
+                title 
             })
         });
         
