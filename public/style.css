@@ -846,3 +846,90 @@ button:hover::before {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--neon-cyan);
 }
+
+/* Video Button Styling */
+.video-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    border: 1px solid #764ba2 !important;
+}
+
+.video-btn:hover {
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+    box-shadow: 0 0 15px rgba(102, 126, 234, 0.5) !important;
+    transform: translateY(-2px);
+}
+
+/* Export to Video Button (main player) */
+.video-export-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    border: 1px solid #764ba2 !important;
+    padding: 0.75rem 1.5rem !important;
+    font-size: 1rem !important;
+    font-weight: 500 !important;
+    margin-left: 1rem !important;
+    box-shadow: 0 4px 6px rgba(102, 126, 234, 0.3) !important;
+}
+
+.video-export-btn:hover {
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+    box-shadow: 0 6px 12px rgba(102, 126, 234, 0.5) !important;
+    transform: translateY(-2px) !important;
+}
+
+.video-export-btn:active {
+    transform: translateY(0) !important;
+    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3) !important;
+}
+
+/* Video Container */
+.video-container {
+    animation: fadeIn 0.3s ease-in;
+}
+
+.video-container h3 {
+    color: var(--neon-cyan);
+    font-weight: 500;
+    margin-bottom: 20px;
+}
+
+.video-options label {
+    display: flex;
+    align-items: center;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.video-options input[type="checkbox"] {
+    margin-right: 10px;
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+}
+
+.video-options select {
+    background: var(--bg-accent);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    cursor: pointer;
+    outline: none;
+}
+
+.video-options select:hover,
+.video-options select:focus {
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.2);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

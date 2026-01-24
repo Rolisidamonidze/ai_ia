@@ -354,25 +354,29 @@ async function muxWebM(videoBlob, audioBlob) {
     console.log('[muxWebM] Creating FFmpeg instance...');
     // Set corePath to help ffmpeg.wasm find its core files
     // Adjust './ffmpeg-core/ffmpeg-core.js' if your core files are in a different folder
-    const ffmpeg = new FFmpegWASM.FFmpeg({
-        corePath: './ffmpeg-core.js'
+    const ffmpegLib = window.FFmpeg;
+    const createFFmpeg = ffmpegLib && ffmpegLib.createFFmpeg ? ffmpegLib.createFFmpeg : null;
+    if (!createFFmpeg) {
+        throw new Error('createFFmpeg is not available on window. Make sure ffmpeg.min.js is loaded.');
+    }
+    const ffmpeg = createFFmpeg({
+        corePath: '/ffmpeg-core/ffmpeg-core.js',
+        log: true
     });
-    ffmpeg.on('log', msg => console.log('[FFmpeg log]', msg));
-    ffmpeg.on('progress', p => console.log('[FFmpeg progress]', p));
-    ffmpeg.on('error', err => console.error('[FFmpeg error]', err));
-    ['log', 'progress', 'error', 'done', 'start', 'exit'].forEach(event => {
-        try {
-            ffmpeg.on(event, (...args) => console.log(`[FFmpeg event:${event}]`, ...args));
-        } catch (e) {}
-    });
+    if (ffmpeg.setLogger) {
+        ffmpeg.setLogger(({ message }) => console.log('[FFmpeg log]', message));
+    }
+    if (ffmpeg.setProgress) {
+        ffmpeg.setProgress(({ ratio }) => console.log('[FFmpeg progress]', ratio));
+    }
     console.log('[muxWebM] Loading ffmpeg.wasm...');
     await ffmpeg.load();
     console.log('[muxWebM] Writing input.webm...');
-    await ffmpeg.writeFile('input.webm', webmData);
+    ffmpeg.FS('writeFile', 'input.webm', webmData);
     console.log('[muxWebM] Writing input.mp3...');
-    await ffmpeg.writeFile('input.mp3', audioData);
-    console.log('[muxWebM] Running ffmpeg.exec...');
-    await ffmpeg.exec([
+    ffmpeg.FS('writeFile', 'input.mp3', audioData);
+    console.log('[muxWebM] Running ffmpeg.run...');
+    await ffmpeg.run(
         '-i', 'input.webm',
         '-i', 'input.mp3',
         '-map', '0:v:0',
@@ -382,9 +386,9 @@ async function muxWebM(videoBlob, audioBlob) {
         '-preset', 'ultrafast',
         '-shortest',
         'output.webm'
-    ]);
+    );
     console.log('[muxWebM] Reading output.webm...');
-    const webmOutData = await ffmpeg.readFile('output.webm');
+    const webmOutData = ffmpeg.FS('readFile', 'output.webm');
     console.log('[muxWebM] Muxing complete. Returning Blob.');
     return new Blob([webmOutData], { type: 'video/webm' });
 }

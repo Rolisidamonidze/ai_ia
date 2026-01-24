@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Exports - AI-IA</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .exports-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .exports-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .exports-header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        .exports-header p {
+            color: #666;
+            font-size: 1em;
+        }
+        .back-btn {
+            display: inline-block;
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            cursor: pointer;
+            border: none;
+            font-size: 1em;
+        }
+        .back-btn:hover {
+            background: #5568d3;
+        }
+        .exports-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .export-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .export-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        }
+        .export-card-video {
+            width: 100%;
+            height: 200px;
+            background: #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .export-card-video video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .export-card-content {
+            padding: 15px;
+        }
+        .export-card-title {
+            font-size: 1.1em;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #333;
+            word-break: break-word;
+        }
+        .export-card-date {
+            font-size: 0.85em;
+            color: #999;
+            margin-bottom: 12px;
+        }
+        .export-card-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .export-card-btn {
+            flex: 1;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: bold;
+            text-align: center;
+            text-decoration: none;
+            transition: background 0.3s;
+        }
+        .export-download-btn {
+            background: #667eea;
+            color: white;
+        }
+        .export-download-btn:hover {
+            background: #5568d3;
+        }
+        .export-delete-btn {
+            background: #ef4444;
+            color: white;
+        }
+        .export-delete-btn:hover {
+            background: #dc2626;
+        }
+        .exports-empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+        .exports-empty p {
+            font-size: 1.2em;
+            margin-bottom: 20px;
+        }
+        .exports-empty a {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar" id="sidebar"></div>
+    <div class="main-content">
+        <div class="exports-container">
+            <button class="back-btn" onclick="window.location.href='/'">← Back to Home</button>
+            <div class="exports-header">
+                <h1>📹 Video Exports</h1>
+                <p>Your saved video exports</p>
+            </div>
+            <div id="exportsGrid" class="exports-grid"></div>
+            <div id="exportsEmpty" class="exports-empty" style="display: none;">
+                <p>No video exports yet</p>
+                <a href="/">Create your first video</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="exports.js" type="module"></script>
+</body>
+</html>

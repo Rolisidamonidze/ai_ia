@@ -38,6 +38,12 @@ try {
   db = admin.firestore();
   bucket = admin.storage().bucket();
   console.log('✅ Firebase initialized successfully');
+  // Force local mode if LOCAL_MODE is set in .env
+  if (process.env.LOCAL_MODE === 'true') {
+    db = null;
+    bucket = null;
+    console.log('⚠️  LOCAL_MODE enabled: Firebase features are disabled, using local storage');
+  }
 } catch (error) {
   console.error('❌ Firebase initialization error:', error);
   console.log('⚠️  App will continue but Firebase features will not work');
@@ -57,15 +63,14 @@ async function ensureSavedItemsDir() {
   }
 }
 
-// Middleware
-app.use(express.static(path.join(__dirname, '/')));
-app.use(express.json({ limit: '50mb' }));
-
-// CORS headers (if needed for development)
+// CORS + COOP/COEP headers (required for SharedArrayBuffer)
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  // Enable SharedArrayBuffer (required by ffmpeg.wasm)
+  res.header('Cross-Origin-Opener-Policy', 'same-origin');
+  res.header('Cross-Origin-Embedder-Policy', 'require-corp');
   
   // Handle preflight OPTIONS requests
   if (req.method === 'OPTIONS') {
@@ -75,6 +80,10 @@ app.use((req, res, next) => {
   next();
 });
 
+// Middleware
+app.use(express.static(path.join(__dirname, '/')));
+app.use(express.json({ limit: '50mb' }));
+
 // Logging middleware
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
@@ -83,6 +92,10 @@ app.use((req, res, next) => {
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.get('/exports.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'exports.html'));
 });
 
 // Validate API key
