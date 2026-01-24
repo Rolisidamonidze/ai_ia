@@ -25,12 +25,12 @@ try {
       const serviceAccount = require(process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
-        storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'gpt-to-video.appspot.com'
+        storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'gpt-to-video'
       });
     } else {
       // For production (Firebase Functions), use default credentials
       admin.initializeApp({
-        storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'gpt-to-video.appspot.com'
+        storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'gpt-to-video'
       });
     }
   }
@@ -91,7 +91,7 @@ function validateApiKey() {
   if (!apiKey) {
     throw new Error('API_KEY not found in environment variables. Please add it to your .env file.');
   }
-  return apiKey;
+  return apiKey.trim();
 }
 
 
@@ -334,24 +334,30 @@ app.post('/api/save-item', async (req, res) => {
         contentType: 'audio/mpeg',
         metadata: {
           cacheControl: 'public, max-age=31536000',
+          metadata: {
+            firebaseStorageDownloadTokens: timestamp
+          }
         }
       });
       
       // Make audio file publicly readable
       await audioFile.makePublic();
-      const audioUrl = `https://storage.googleapis.com/${bucket.name}/audio/${itemId}.mp3`;
+      const audioUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent('audio/' + itemId + '.mp3')}?alt=media&token=${timestamp}`;
       
       // Save text to Firebase Storage
       const textFile = bucket.file(`text/${itemId}.txt`);
       await textFile.save(text, {
-        contentType: 'text/plain',
+        contentType: 'text/plain; charset=utf-8',
         metadata: {
           cacheControl: 'public, max-age=31536000',
+          metadata: {
+            firebaseStorageDownloadTokens: timestamp
+          }
         }
       });
       
       await textFile.makePublic();
-      const textUrl = `https://storage.googleapis.com/${bucket.name}/text/${itemId}.txt`;
+      const textUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent('text/' + itemId + '.txt')}?alt=media&token=${timestamp}`;
       
       // Save metadata to Firestore
       const metadata = {
@@ -678,6 +684,53 @@ app.patch('/api/saved-item/:itemId/playlist', async (req, res) => {
     console.error('Update playlist error:', error);
     res.status(500).json({ 
       error: 'Failed to update playlist', 
+      message: error.message 
+    });
+  }
+});
+
+// Proxy endpoint for Firebase Storage files to handle CORS
+app.get('/api/storage-proxy', async (req, res) => {
+  try {
+    const { url } = req.query;
+    
+    if (!url) {
+      return res.status(400).json({ error: 'URL parameter is required' });
+    }
+    
+    console.log('Proxying storage file:', url);
+    
+    // Fetch the file from Firebase Storage
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      console.error('Storage fetch failed:', response.status, response.statusText);
+      return res.status(response.status).json({ 
+        error: 'Failed to fetch file from storage',
+        status: response.status 
+      });
+    }
+    
+    // Get content type from storage response
+    const contentType = response.headers.get('content-type') || 'application/octet-stream';
+    
+    // Set proper CORS and content headers
+    res.set({
+      'Content-Type': contentType,
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Cache-Control': 'public, max-age=31536000'
+    });
+    
+    // Stream the file to response
+    const buffer = await response.arrayBuffer();
+    res.send(Buffer.from(buffer));
+    
+  } catch (error) {
+    console.error('Storage proxy error:', error);
+    res.status(500).json({ 
+      error: 'Failed to proxy storage file', 
       message: error.message 
     });
   }
