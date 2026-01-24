@@ -54,32 +54,40 @@ A modern web application that generates text responses using ChatGPT and convert
 
 6. **Open your browser** and go to `http://localhost:3000`
 
-## 🔥 Firebase Deployment
+## 🔥 Firebase Deployment (Automatic on Git Push)
 
-This app is configured to deploy to Firebase with cloud storage capabilities.
+This app is configured for **automatic deployment to Firebase** using GitHub Actions.
 
-### Quick Deploy
+### Setup (One-Time)
 
-1. **Setup Firebase** (one-time):
+1. **Upgrade to Blaze Plan** (required for Cloud Functions):
+   - Go to https://console.firebase.google.com/project/gpt-to-video/billing/plan
+   - Upgrade from Spark to Blaze (pay-as-you-go with generous free tier)
+
+2. **Generate Firebase Token**:
    ```bash
-   firebase login
+   firebase login:ci
    ```
+   Copy the token provided.
 
-2. **Update Configuration**:
-   - Edit `.firebaserc` and replace `YOUR_FIREBASE_PROJECT_ID` with your project ID
-   - Enable Firestore, Storage, Functions, and Hosting in Firebase Console
+3. **Add GitHub Secret**:
+   - Go to GitHub Repository > Settings > Secrets and variables > Actions
+   - Add new secret: `FIREBASE_TOKEN` = (paste your token from above)
 
-3. **Set Environment Variables**:
+4. **Push to Deploy**:
    ```bash
-   firebase functions:config:set openai.key="your_openai_api_key"
+   git push origin main
    ```
+   Your app automatically deploys to Firebase Hosting and Cloud Functions!
 
-4. **Deploy**:
-   ```bash
-   npm run deploy
-   ```
+### What Gets Deployed Automatically
+- ✅ Frontend (Firebase Hosting) → https://your-project-id.web.app
+- ✅ Backend/API (Cloud Functions)
+- ✅ Database Rules (Firestore)
+- ✅ Storage Rules
+- ✅ Indexes
 
-For detailed deployment instructions, see [DEPLOY.md](DEPLOY.md) and [FIREBASE_SETUP.md](FIREBASE_SETUP.md).
+For detailed setup, see [DEPLOY.md](DEPLOY.md).
 
 ## 📁 Project Structure
 
