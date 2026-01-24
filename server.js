@@ -690,13 +690,16 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 ChatGPT Video Assembler server running on port ${PORT}`);
-  console.log(`📍 Access the app at: http://localhost:${PORT}`);
-  console.log(`🔑 API Key configured: ${process.env.API_KEY ? '✅ Yes' : '❌ No - please add to .env file'}`);
-  console.log(`🔥 Firebase initialized: ${(db && bucket) ? '✅ Yes' : '❌ No - using local storage'}`);
-  console.log(`⏰ Started at: ${new Date().toISOString()}`);
-});
+// Only start server if not running in Firebase Functions
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`🚀 ChatGPT Video Assembler server running on port ${PORT}`);
+    console.log(`📍 Access the app at: http://localhost:${PORT}`);
+    console.log(`🔑 API Key configured: ${process.env.API_KEY ? '✅ Yes' : '❌ No - please add to .env file'}`);
+    console.log(`🔥 Firebase initialized: ${(db && bucket) ? '✅ Yes' : '❌ No - using local storage'}`);
+    console.log(`⏰ Started at: ${new Date().toISOString()}`);
+  });
+}
 
 // Export for Firebase Functions
 module.exports = app;
