@@ -2,7 +2,15 @@ const express = require('express');
 const path = require('path');
 const fetch = require('node-fetch');
 const fs = require('fs').promises;
-require('dotenv').config();
+
+// Only load .env for local development, not in Firebase Functions
+if (process.env.NODE_ENV !== 'production' && !process.env.FUNCTION_TARGET && !process.env.FUNCTIONS_EMULATOR) {
+  try {
+    require('dotenv').config();
+  } catch (e) {
+    // Dotenv not available, skip
+  }
+}
 
 // Initialize Firebase Admin
 const admin = require('firebase-admin');
@@ -10,18 +18,21 @@ const admin = require('firebase-admin');
 // Initialize Firebase Admin SDK
 let db, bucket;
 try {
-  // Try to initialize with service account (for local development)
-  if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
-    const serviceAccount = require(process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      storageBucket: process.env.FIREBASE_STORAGE_BUCKET
-    });
-  } else {
-    // For production (Firebase Functions), use default credentials
-    admin.initializeApp({
-      storageBucket: process.env.FIREBASE_STORAGE_BUCKET
-    });
+  // Check if Firebase Admin is already initialized (in Firebase Functions)
+  if (admin.apps.length === 0) {
+    // Try to initialize with service account (for local development)
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
+      const serviceAccount = require(process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'gpt-to-video.appspot.com'
+      });
+    } else {
+      // For production (Firebase Functions), use default credentials
+      admin.initializeApp({
+        storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'gpt-to-video.appspot.com'
+      });
+    }
   }
   
   db = admin.firestore();
