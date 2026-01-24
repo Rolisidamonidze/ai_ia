@@ -7,19 +7,21 @@ A modern web application that generates text responses using ChatGPT and convert
 - **AI-Powered Text Generation**: Uses ChatGPT (GPT-3.5-turbo) to generate responses from prompts
 - **Text-to-Speech**: Converts generated text to high-quality audio using OpenAI's TTS API
 - **Synchronized Playback**: Real-time word highlighting that follows the audio
-- **Download Options**: Save both text and audio files locally
+- **Cloud Storage**: Items saved to Firebase Storage and Firestore (with local fallback)
+- **Download Options**: Save both text and audio files
 - **Responsive Design**: Beautiful UI that works on desktop and mobile
-- **History Sidebar**: Keep track of previously generated content
-- **Modern Tech Stack**: Built with vanilla JavaScript ES6 modules and Express.js
+- **History Sidebar**: Keep track of previously generated content with playlists
+- **Modern Tech Stack**: Built with vanilla JavaScript ES6 modules, Express.js, and Firebase
 
 ## 🛠️ Setup
 
 ### Prerequisites
 
-- Node.js (v14 or higher)
+- Node.js (v18 or higher)
 - OpenAI API key
+- Firebase project (for production deployment)
 
-### Installation
+### Local Development Setup
 
 1. **Clone or download this project**
 
@@ -29,12 +31,13 @@ A modern web application that generates text responses using ChatGPT and convert
    ```
 
 3. **Set up environment variables**:
-   ```bash
-   cp .env.example .env
-   ```
-   Edit `.env` and add your OpenAI API key:
-   ```
-   API_KEY=your_actual_openai_api_key_here
+   Create a `.env` file with:
+   ```env
+   API_KEY=your_openai_api_key_here
+   PORT=3000
+   # Optional - for Firebase integration:
+   FIREBASE_STORAGE_BUCKET=your-project-id.appspot.com
+   FIREBASE_SERVICE_ACCOUNT_PATH=./serviceAccountKey.json
    ```
 
 4. **Get an OpenAI API key**:
@@ -42,12 +45,64 @@ A modern web application that generates text responses using ChatGPT and convert
    - Create a new API key
    - Copy it to your `.env` file
 
-5. **Start the server**:
+5. **Start the development server**:
    ```bash
    npm start
    ```
+   
+   The app will run locally using file-based storage in the `saved-items/` folder.
 
 6. **Open your browser** and go to `http://localhost:3000`
+
+## 🔥 Firebase Deployment
+
+This app is configured to deploy to Firebase with cloud storage capabilities.
+
+### Quick Deploy
+
+1. **Setup Firebase** (one-time):
+   ```bash
+   firebase login
+   ```
+
+2. **Update Configuration**:
+   - Edit `.firebaserc` and replace `YOUR_FIREBASE_PROJECT_ID` with your project ID
+   - Enable Firestore, Storage, Functions, and Hosting in Firebase Console
+
+3. **Set Environment Variables**:
+   ```bash
+   firebase functions:config:set openai.key="your_openai_api_key"
+   ```
+
+4. **Deploy**:
+   ```bash
+   npm run deploy
+   ```
+
+For detailed deployment instructions, see [DEPLOY.md](DEPLOY.md) and [FIREBASE_SETUP.md](FIREBASE_SETUP.md).
+
+## 📁 Project Structure
+
+```
+gpt-to-video/
+├── index.html          # Main HTML file
+├── app.js              # Frontend JavaScript
+├── style.css           # Styles
+├── server.js           # Express server with Firebase integration
+├── index.js            # Firebase Functions entry point
+├── package.json        # Dependencies and scripts
+├── firebase.json       # Firebase configuration
+├── .firebaserc         # Firebase project settings
+├── firestore.rules     # Firestore security rules
+├── storage.rules       # Storage security rules
+├── modules/            # Frontend modules
+│   ├── audioUtils.js
+│   ├── domUtils.js
+│   ├── sidebar.js
+│   └── textSync.js
+├── public/             # Firebase Hosting files
+└── saved-items/        # Local storage (dev only)
+```
 
 ## 📱 How to Use
 

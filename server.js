@@ -3,12 +3,40 @@ const path = require('path');
 const fetch = require('node-fetch');
 const fs = require('fs').promises;
 require('dotenv').config();
-const app = express();
 
+// Initialize Firebase Admin
+const admin = require('firebase-admin');
+
+// Initialize Firebase Admin SDK
+let db, bucket;
+try {
+  // Try to initialize with service account (for local development)
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
+    const serviceAccount = require(process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET
+    });
+  } else {
+    // For production (Firebase Functions), use default credentials
+    admin.initializeApp({
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET
+    });
+  }
+  
+  db = admin.firestore();
+  bucket = admin.storage().bucket();
+  console.log('✅ Firebase initialized successfully');
+} catch (error) {
+  console.error('❌ Firebase initialization error:', error);
+  console.log('⚠️  App will continue but Firebase features will not work');
+}
+
+const app = express();
 const PORT = process.env.PORT || 3000;
 const SAVED_ITEMS_DIR = path.join(__dirname, 'saved-items');
 
-// Ensure saved items directory exists
+// Keep this for backwards compatibility/local fallback
 async function ensureSavedItemsDir() {
   try {
     await fs.access(SAVED_ITEMS_DIR);
@@ -17,7 +45,6 @@ async function ensureSavedItemsDir() {
     console.log('Created saved-items directory');
   }
 }
-ensureSavedItemsDir();
 
 // Middleware
 app.use(express.static(path.join(__dirname, '/')));
@@ -256,37 +283,19 @@ app.post('/api/save-item', async (req, res) => {
       return res.status(400).json({ error: 'Text and audioBlob are required' });
     }
 
-    // Ensure directory exists
-    await ensureSavedItemsDir();
-
     const timestamp = Date.now();
     const date = new Date(timestamp).toISOString().slice(0, 19).replace('T', ' ');
     const itemId = `item_${timestamp}`;
     
     console.log(`Saving item ${itemId}...`);
     
-    // Save text file
-    const textPath = path.join(SAVED_ITEMS_DIR, `${itemId}.txt`);
-    await fs.writeFile(textPath, text, 'utf8');
-    console.log(`Text saved: ${textPath}`);
-    
-    // Save audio file (convert base64 to binary)
-    // Extract base64 data after the comma (handles any data URL format)
-    const base64Data = audioBlob.includes(',') ? audioBlob.split(',')[1] : audioBlob;
-    const audioBuffer = Buffer.from(base64Data, 'base64');
-    const audioPath = path.join(SAVED_ITEMS_DIR, `${itemId}.mp3`);
-    await fs.writeFile(audioPath, audioBuffer);
-    console.log(`Audio saved: ${audioPath}`);
-    
     // Use provided title or create a better fallback based on text content
     let itemName = title;
     if (!itemName) {
-      // Create a descriptive fallback from first few words
       const words = text.trim().split(/\s+/).slice(0, 6);
       const preview = words.join(' ');
       itemName = preview.length > 50 ? preview.substring(0, 50) + '...' : preview;
       
-      // If still too short or generic, add date
       if (itemName.length < 10) {
         itemName = `Content from ${new Date(timestamp).toLocaleString('en-US', { 
           month: 'short', 
@@ -297,23 +306,84 @@ app.post('/api/save-item', async (req, res) => {
       }
     }
     
-    // Save metadata
-    const metadata = {
-      id: itemId,
-      name: itemName,
-      text,
-      timestamp,
-      date,
-      textFile: `${itemId}.txt`,
-      audioFile: `${itemId}.mp3`,
-      playlist: playlist || 'default'
-    };
-    
-    const metaPath = path.join(SAVED_ITEMS_DIR, `${itemId}.json`);
-    await fs.writeFile(metaPath, JSON.stringify(metadata, null, 2));
-    
-    console.log(`Saved item ${itemId}`);
-    res.json({ success: true, itemId, name: metadata.name });
+    // Save to Firebase
+    if (db && bucket) {
+      // Save audio to Firebase Storage
+      const base64Data = audioBlob.includes(',') ? audioBlob.split(',')[1] : audioBlob;
+      const audioBuffer = Buffer.from(base64Data, 'base64');
+      
+      const audioFile = bucket.file(`audio/${itemId}.mp3`);
+      await audioFile.save(audioBuffer, {
+        contentType: 'audio/mpeg',
+        metadata: {
+          cacheControl: 'public, max-age=31536000',
+        }
+      });
+      
+      // Make audio file publicly readable
+      await audioFile.makePublic();
+      const audioUrl = `https://storage.googleapis.com/${bucket.name}/audio/${itemId}.mp3`;
+      
+      // Save text to Firebase Storage
+      const textFile = bucket.file(`text/${itemId}.txt`);
+      await textFile.save(text, {
+        contentType: 'text/plain',
+        metadata: {
+          cacheControl: 'public, max-age=31536000',
+        }
+      });
+      
+      await textFile.makePublic();
+      const textUrl = `https://storage.googleapis.com/${bucket.name}/text/${itemId}.txt`;
+      
+      // Save metadata to Firestore
+      const metadata = {
+        id: itemId,
+        name: itemName,
+        text,
+        timestamp,
+        date,
+        audioUrl,
+        textUrl,
+        playlist: playlist || 'default'
+      };
+      
+      await db.collection('items').doc(itemId).set(metadata);
+      
+      console.log(`✅ Saved item ${itemId} to Firebase`);
+      res.json({ success: true, itemId, name: metadata.name });
+    } else {
+      // Fallback to local file system
+      await ensureSavedItemsDir();
+      
+      // Save text file
+      const textPath = path.join(SAVED_ITEMS_DIR, `${itemId}.txt`);
+      await fs.writeFile(textPath, text, 'utf8');
+      
+      // Save audio file
+      const base64Data = audioBlob.includes(',') ? audioBlob.split(',')[1] : audioBlob;
+      const audioBuffer = Buffer.from(base64Data, 'base64');
+      const audioPath = path.join(SAVED_ITEMS_DIR, `${itemId}.mp3`);
+      await fs.writeFile(audioPath, audioBuffer);
+      
+      // Save metadata
+      const metadata = {
+        id: itemId,
+        name: itemName,
+        text,
+        timestamp,
+        date,
+        textFile: `${itemId}.txt`,
+        audioFile: `${itemId}.mp3`,
+        playlist: playlist || 'default'
+      };
+      
+      const metaPath = path.join(SAVED_ITEMS_DIR, `${itemId}.json`);
+      await fs.writeFile(metaPath, JSON.stringify(metadata, null, 2));
+      
+      console.log(`Saved item ${itemId} (local fallback)`);
+      res.json({ success: true, itemId, name: metadata.name });
+    }
     
   } catch (error) {
     console.error('Save item error:', error);
@@ -327,32 +397,52 @@ app.post('/api/save-item', async (req, res) => {
 // Get saved items list
 app.get('/api/saved-items', async (req, res) => {
   try {
-    const files = await fs.readdir(SAVED_ITEMS_DIR);
-    const jsonFiles = files.filter(f => f.endsWith('.json'));
-    
-    const items = [];
-    for (const file of jsonFiles) {
-      try {
-        const content = await fs.readFile(path.join(SAVED_ITEMS_DIR, file), 'utf8');
-        const metadata = JSON.parse(content);
+    if (db) {
+      // Use Firebase Firestore
+      const snapshot = await db.collection('items').orderBy('timestamp', 'desc').get();
+      const items = [];
+      
+      snapshot.forEach(doc => {
+        const data = doc.data();
         items.push({
-          id: metadata.id,
-          name: metadata.name,
-          timestamp: metadata.timestamp,
-          date: metadata.date,
-          textUrl: `/api/saved-file/${metadata.textFile}`,
-          audioUrl: `/api/saved-file/${metadata.audioFile}`,
-          playlist: metadata.playlist || 'default'
+          id: data.id,
+          name: data.name,
+          timestamp: data.timestamp,
+          date: data.date,
+          textUrl: data.textUrl,
+          audioUrl: data.audioUrl,
+          playlist: data.playlist || 'default'
         });
-      } catch (err) {
-        console.warn(`Error reading metadata file ${file}:`, err.message);
+      });
+      
+      res.json(items);
+    } else {
+      // Fallback to local file system
+      const files = await fs.readdir(SAVED_ITEMS_DIR);
+      const jsonFiles = files.filter(f => f.endsWith('.json'));
+      
+      const items = [];
+      for (const file of jsonFiles) {
+        try {
+          const content = await fs.readFile(path.join(SAVED_ITEMS_DIR, file), 'utf8');
+          const metadata = JSON.parse(content);
+          items.push({
+            id: metadata.id,
+            name: metadata.name,
+            timestamp: metadata.timestamp,
+            date: metadata.date,
+            textUrl: `/api/saved-file/${metadata.textFile}`,
+            audioUrl: `/api/saved-file/${metadata.audioFile}`,
+            playlist: metadata.playlist || 'default'
+          });
+        } catch (err) {
+          console.warn(`Error reading metadata file ${file}:`, err.message);
+        }
       }
+      
+      items.sort((a, b) => b.timestamp - a.timestamp);
+      res.json(items);
     }
-    
-    // Sort by timestamp, newest first
-    items.sort((a, b) => b.timestamp - a.timestamp);
-    
-    res.json(items);
     
   } catch (error) {
     console.error('Load items error:', error);
@@ -366,41 +456,68 @@ app.get('/api/saved-items', async (req, res) => {
 // Get items grouped by playlist
 app.get('/api/playlists', async (req, res) => {
   try {
-    const files = await fs.readdir(SAVED_ITEMS_DIR);
-    const jsonFiles = files.filter(f => f.endsWith('.json'));
-    
-    const playlists = {};
-    
-    for (const file of jsonFiles) {
-      try {
-        const content = await fs.readFile(path.join(SAVED_ITEMS_DIR, file), 'utf8');
-        const metadata = JSON.parse(content);
-        const playlistName = metadata.playlist || 'default';
+    if (db) {
+      // Use Firebase Firestore
+      const snapshot = await db.collection('items').orderBy('timestamp', 'desc').get();
+      const playlists = {};
+      
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const playlistName = data.playlist || 'default';
         
         if (!playlists[playlistName]) {
           playlists[playlistName] = [];
         }
         
         playlists[playlistName].push({
-          id: metadata.id,
-          name: metadata.name,
-          timestamp: metadata.timestamp,
-          date: metadata.date,
-          textUrl: `/api/saved-file/${metadata.textFile}`,
-          audioUrl: `/api/saved-file/${metadata.audioFile}`,
+          id: data.id,
+          name: data.name,
+          timestamp: data.timestamp,
+          date: data.date,
+          textUrl: data.textUrl,
+          audioUrl: data.audioUrl,
           playlist: playlistName
         });
-      } catch (err) {
-        console.warn(`Error reading metadata file ${file}:`, err.message);
+      });
+      
+      res.json(playlists);
+    } else {
+      // Fallback to local file system
+      const files = await fs.readdir(SAVED_ITEMS_DIR);
+      const jsonFiles = files.filter(f => f.endsWith('.json'));
+      
+      const playlists = {};
+      
+      for (const file of jsonFiles) {
+        try {
+          const content = await fs.readFile(path.join(SAVED_ITEMS_DIR, file), 'utf8');
+          const metadata = JSON.parse(content);
+          const playlistName = metadata.playlist || 'default';
+          
+          if (!playlists[playlistName]) {
+            playlists[playlistName] = [];
+          }
+          
+          playlists[playlistName].push({
+            id: metadata.id,
+            name: metadata.name,
+            timestamp: metadata.timestamp,
+            date: metadata.date,
+            textUrl: `/api/saved-file/${metadata.textFile}`,
+            audioUrl: `/api/saved-file/${metadata.audioFile}`,
+            playlist: playlistName
+          });
+        } catch (err) {
+          console.warn(`Error reading metadata file ${file}:`, err.message);
+        }
       }
+      
+      Object.keys(playlists).forEach(playlistName => {
+        playlists[playlistName].sort((a, b) => b.timestamp - a.timestamp);
+      });
+      
+      res.json(playlists);
     }
-    
-    // Sort items within each playlist by timestamp
-    Object.keys(playlists).forEach(playlistName => {
-      playlists[playlistName].sort((a, b) => b.timestamp - a.timestamp);
-    });
-    
-    res.json(playlists);
     
   } catch (error) {
     console.error('Load playlists error:', error);
@@ -452,31 +569,45 @@ app.delete('/api/saved-item/:itemId', async (req, res) => {
       return res.status(400).json({ error: 'Item ID is required' });
     }
     
-    const metaPath = path.join(SAVED_ITEMS_DIR, `${itemId}.json`);
-    const textPath = path.join(SAVED_ITEMS_DIR, `${itemId}.txt`);
-    const audioPath = path.join(SAVED_ITEMS_DIR, `${itemId}.mp3`);
-    
-    console.log(`Deleting files for ${itemId}:`, { metaPath, textPath, audioPath });
-    
-    // Delete all files for this item
-    const results = await Promise.allSettled([
-      fs.unlink(metaPath),
-      fs.unlink(textPath),
-      fs.unlink(audioPath)
-    ]);
-    
-    // Log which files were deleted
-    results.forEach((result, i) => {
-      const files = [metaPath, textPath, audioPath];
-      if (result.status === 'fulfilled') {
-        console.log(`Deleted: ${files[i]}`);
-      } else {
-        console.warn(`Failed to delete ${files[i]}:`, result.reason?.message);
-      }
-    });
-    
-    console.log(`Successfully processed delete for item ${itemId}`);
-    res.json({ success: true, itemId });
+    if (db && bucket) {
+      // Delete from Firebase
+      // Delete audio file from Storage
+      const audioFile = bucket.file(`audio/${itemId}.mp3`);
+      await audioFile.delete().catch(err => console.warn(`Audio file not found: ${err.message}`));
+      
+      // Delete text file from Storage
+      const textFile = bucket.file(`text/${itemId}.txt`);
+      await textFile.delete().catch(err => console.warn(`Text file not found: ${err.message}`));
+      
+      // Delete metadata from Firestore
+      await db.collection('items').doc(itemId).delete();
+      
+      console.log(`✅ Successfully deleted item ${itemId} from Firebase`);
+      res.json({ success: true, itemId });
+    } else {
+      // Fallback to local file system
+      const metaPath = path.join(SAVED_ITEMS_DIR, `${itemId}.json`);
+      const textPath = path.join(SAVED_ITEMS_DIR, `${itemId}.txt`);
+      const audioPath = path.join(SAVED_ITEMS_DIR, `${itemId}.mp3`);
+      
+      const results = await Promise.allSettled([
+        fs.unlink(metaPath),
+        fs.unlink(textPath),
+        fs.unlink(audioPath)
+      ]);
+      
+      results.forEach((result, i) => {
+        const files = [metaPath, textPath, audioPath];
+        if (result.status === 'fulfilled') {
+          console.log(`Deleted: ${files[i]}`);
+        } else {
+          console.warn(`Failed to delete ${files[i]}:`, result.reason?.message);
+        }
+      });
+      
+      console.log(`Successfully processed delete for item ${itemId}`);
+      res.json({ success: true, itemId });
+    }
     
   } catch (error) {
     console.error('Delete item error:', error);
@@ -503,20 +634,28 @@ app.patch('/api/saved-item/:itemId/playlist', async (req, res) => {
       return res.status(400).json({ error: 'Playlist name is required' });
     }
     
-    const metaPath = path.join(SAVED_ITEMS_DIR, `${itemId}.json`);
-    
-    // Read existing metadata
-    const content = await fs.readFile(metaPath, 'utf8');
-    const metadata = JSON.parse(content);
-    
-    // Update playlist
-    metadata.playlist = playlist;
-    
-    // Write back
-    await fs.writeFile(metaPath, JSON.stringify(metadata, null, 2));
-    
-    console.log(`Successfully updated playlist for item ${itemId}`);
-    res.json({ success: true, itemId, playlist });
+    if (db) {
+      // Update in Firebase Firestore
+      await db.collection('items').doc(itemId).update({
+        playlist: playlist
+      });
+      
+      console.log(`✅ Successfully updated playlist for item ${itemId} in Firebase`);
+      res.json({ success: true, itemId, playlist });
+    } else {
+      // Fallback to local file system
+      const metaPath = path.join(SAVED_ITEMS_DIR, `${itemId}.json`);
+      
+      const content = await fs.readFile(metaPath, 'utf8');
+      const metadata = JSON.parse(content);
+      
+      metadata.playlist = playlist;
+      
+      await fs.writeFile(metaPath, JSON.stringify(metadata, null, 2));
+      
+      console.log(`Successfully updated playlist for item ${itemId}`);
+      res.json({ success: true, itemId, playlist });
+    }
     
   } catch (error) {
     console.error('Update playlist error:', error);
@@ -532,7 +671,8 @@ app.get('/health', (req, res) => {
   res.json({ 
     status: 'healthy', 
     timestamp: new Date().toISOString(),
-    hasApiKey: !!process.env.API_KEY
+    hasApiKey: !!process.env.API_KEY,
+    firebaseInitialized: !!(db && bucket)
   });
 });
 
@@ -554,5 +694,9 @@ app.listen(PORT, () => {
   console.log(`🚀 ChatGPT Video Assembler server running on port ${PORT}`);
   console.log(`📍 Access the app at: http://localhost:${PORT}`);
   console.log(`🔑 API Key configured: ${process.env.API_KEY ? '✅ Yes' : '❌ No - please add to .env file'}`);
+  console.log(`🔥 Firebase initialized: ${(db && bucket) ? '✅ Yes' : '❌ No - using local storage'}`);
   console.log(`⏰ Started at: ${new Date().toISOString()}`);
 });
+
+// Export for Firebase Functions
+module.exports = app;

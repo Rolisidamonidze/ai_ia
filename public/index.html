@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatGPT Video Assembler</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd/ffmpeg.js"></script>
+    <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
+</head>
+<body>
+    <div class="sidebar" id="sidebar"></div>
+    <div class="main-content">
+        <div class="container">
+            <form id="apiForm">
+                <label for="prompt">Prompt:</label>
+                <textarea id="prompt" rows="4" required placeholder="Enter your prompt to generate text and audio..."></textarea>
+                
+                <label for="voiceSelect">Voice:</label>
+                <select id="voiceSelect">
+                    <option value="alloy">Alloy (Neutral)</option>
+                    <option value="echo">Echo (Male)</option>
+                    <option value="fable">Fable (British Male)</option>
+                    <option value="onyx" selected>Onyx (Deep Male)</option>
+                    <option value="nova">Nova (Female)</option>
+                    <option value="shimmer">Shimmer (Soft Female)</option>
+                </select>
+                
+                <label for="playlistInput">Playlist (optional):</label>
+                <input type="text" id="playlistInput" placeholder="Enter playlist name or leave empty for default">
+                
+                <button type="submit">Generate Content</button>
+            </form>
+            
+            <div id="status" style="display: none;"></div>
+            
+            <div id="progressContainer" style="display: none;">
+                <label for="progressBar">Progress:</label>
+                <progress id="progressBar" value="0" max="100"></progress>
+            </div>  
+        </div>
+    </div>
+    <script src="app.js" type="module"></script>
+</body>
+</html>
