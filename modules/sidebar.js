@@ -432,140 +432,54 @@ async function deleteItem(itemId) {
 // Create video from item
 async function createVideoForItem(item, { apiForm, status, backBtn, downloadLink }) {
     try {
-        // Hide form
         apiForm.style.display = 'none';
         status.style.display = 'block';
-        status.textContent = 'Initializing video creation...';
+        status.textContent = 'Queuing export and redirecting to Exports page...';
         backBtn.style.display = 'block';
-        
-        // Hide player components
-        const container = document.getElementById('lyricsContainer');
-        if (container) container.style.display = 'none';
-        const controls = document.getElementById('lyricsControls');
-        if (controls) controls.style.display = 'none';
-        
-        // Create or get video container
-        let videoContainer = document.getElementById('videoContainer');
-        if (!videoContainer) {
-            videoContainer = document.createElement('div');
-            videoContainer.id = 'videoContainer';
-            videoContainer.className = 'video-container';
-            videoContainer.style.cssText = `
-                max-width: 800px;
-                margin: 20px auto;
-                padding: 20px;
-                background: white;
-                border-radius: 8px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                display: none;
-            `;
-            document.querySelector('.main-content .container').appendChild(videoContainer);
-        }
-        
-        videoContainer.style.display = 'block';
-        videoContainer.innerHTML = `
-            <h3 style="margin-top: 0;">Creating Video: ${item.name}</h3>
-            <div class="video-progress" style="margin: 20px 0;">
-                <div class="progress-bar-container" style="width: 100%; height: 30px; background: #f0f0f0; border-radius: 15px; overflow: hidden; position: relative;">
-                    <div class="progress-bar-fill" style="height: 100%; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); width: 0%; transition: width 0.3s;"></div>
-                    <div class="progress-bar-text" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; color: #333;">0%</div>
-                </div>
-                <p class="progress-message" style="margin-top: 10px; color: #666; text-align: center;">Initializing...</p>
-            </div>
-            <div class="video-options" style="margin: 20px 0;">
-                <label style="display: block; margin: 10px 0;">
-                    <input type="checkbox" id="videoAnimateBackground" checked> Animate Background Colors
-                </label>
-                <label style="display: block; margin: 10px 0;">
-                    Video Quality:
-                    <select id="videoQuality" style="margin-left: 10px;">
-                        <option value="low">Low (Fast, 5 fps)</option>
-                        <option value="medium" selected>Medium (10 fps)</option>
-                        <option value="high">High (Slow, 30 fps)</option>
-                    </select>
-                </label>
-            </div>
-            <div id="videoPreview" style="margin: 20px 0; display: none;">
-                <video controls style="width: 100%; max-width: 640px; border-radius: 8px; display: block; margin: 0 auto;"></video>
-                <div style="text-align: center; margin-top: 15px;">
-                    <a href="#" class="download-link" id="videoDownloadLink" download style="display: inline-block; padding: 12px 24px; background: #667eea; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">
-                        📥 Download Video
-                    </a>
-                </div>
-            </div>
-        `;
-        
-        // Get options
-        const animateBackground = document.getElementById('videoAnimateBackground').checked;
-        const quality = document.getElementById('videoQuality').value;
-        
-        const fpsMap = { low: 5, medium: 10, high: 30 };
-        const fps = fpsMap[quality] || 10;
-        
-        // Progress callback
-        const progressBar = videoContainer.querySelector('.progress-bar-fill');
-        const progressText = videoContainer.querySelector('.progress-bar-text');
-        const progressMessage = videoContainer.querySelector('.progress-message');
-        
-        const onProgress = ({ stage, progress, message }) => {
-            progressBar.style.width = progress + '%';
-            progressText.textContent = Math.round(progress) + '%';
-            progressMessage.textContent = message;
-            status.textContent = `Video creation: ${message}`;
-        };
-        
-        // Load item text and audio
-        const textResponse = await fetch(item.textUrl);
-        const text = await textResponse.text();
-        
-        // Create item object with proper structure
-        const itemWithAudio = {
-            ...item,
-            text: text
-        };
-        
-        // Create video
-        const videoBlob = await createVideoFromItem(itemWithAudio, {
-            fps: fps,
-            width: 1280,
-            height: 720,
-            animateBackground: animateBackground,
-            gradientBackground: true,
-            gradientColor1: '#1a1a2e',
-            gradientColor2: '#16213e',
-            textColor: '#ffffff',
-            fontSize: 48,
-            fontFamily: 'Arial, sans-serif'
-        }, onProgress);
-        
-        // Show video preview
-        const videoPreview = document.getElementById('videoPreview');
-        const video = videoPreview.querySelector('video');
-        // Save export to queue (localStorage)
+        if (downloadLink) downloadLink.style.display = 'none';
+
+        // Grab text so the exports page can work even if the original item is removed
+        let textContent = '';
         try {
-            // Dynamically import saveExport from public/exports.js
-            const { saveExport } = await import('/public/exports.js');
-            saveExport(videoBlob, item.name);
-        } catch (e) {
-            console.warn('Could not save export to queue:', e);
+            const textResponse = await fetch(item.textUrl);
+            textContent = await textResponse.text();
+        } catch (err) {
+            console.warn('Could not prefetch text for export queue:', err);
         }
-        const videoUrl = URL.createObjectURL(videoBlob);
-        video.src = videoUrl;
-        videoPreview.style.display = 'block';
-        // Setup download link
-        const downloadBtn = document.getElementById('videoDownloadLink');
-        downloadBtn.href = videoUrl;
-        downloadBtn.download = `${item.name.replace(/[^a-z0-9]/gi, '_')}_video.webm`;
 
-        status.textContent = 'Video created successfully!';
-        status.style.background = 'rgba(34, 197, 94, 0.1)';
-        status.style.color = '#16a34a';
+        const queue = JSON.parse(localStorage.getItem('videoExportQueue') || '[]');
+        const job = {
+            id: `job_${Date.now()}`,
+            title: item.name,
+            textUrl: item.textUrl,
+            text: textContent,
+            audioFile: item.audioFile,
+            audioUrl: item.audioUrl,
+            createdAt: Date.now(),
+            status: 'queued',
+            progress: 0,
+            message: 'Queued',
+            options: {
+                fps: 10,
+                width: 1280,
+                height: 720,
+                animateBackground: true,
+                gradientBackground: true,
+                gradientColor1: '#1a1a2e',
+                gradientColor2: '#16213e',
+                textColor: '#ffffff',
+                fontSize: 48,
+                fontFamily: 'Arial, sans-serif'
+            }
+        };
 
-        // Reset status style after delay
+        queue.push(job);
+        localStorage.setItem('videoExportQueue', JSON.stringify(queue));
+
+        status.textContent = 'Export queued! Redirecting to Exports...';
         setTimeout(() => {
-            status.style.background = 'rgba(255, 255, 255, 0.5)';
-            status.style.color = '#4b5563';
-        }, 5000);
+            window.location.href = '/public/exports.html';
+        }, 400);
         
     } catch (error) {
         console.error('Error creating video:', error);

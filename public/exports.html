@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video Exports - AI-IA</title>
     <link rel="stylesheet" href="style.css">
+    <!-- ffmpeg.wasm UMD bundle (required for encoding on this page) -->
+    <script src="/package/dist/ffmpeg.min.js"></script>
     <style>
         .exports-container {
             max-width: 1200px;
@@ -130,6 +132,88 @@
             text-decoration: none;
             border-radius: 8px;
         }
+        .exports-queue {
+            margin-top: 10px;
+            padding: 16px;
+            background: #0f172a;
+            border-radius: 12px;
+            color: #e5e7eb;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+        }
+        .exports-queue h2 {
+            margin: 0 0 12px 0;
+            font-size: 1.25em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .queue-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 12px;
+        }
+        .queue-card {
+            background: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 10px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .queue-card-title {
+            font-weight: 700;
+            color: #f3f4f6;
+            word-break: break-word;
+        }
+        .queue-card-meta {
+            font-size: 0.85em;
+            color: #9ca3af;
+            display: flex;
+            justify-content: space-between;
+        }
+        .queue-progress {
+            position: relative;
+            width: 100%;
+            height: 18px;
+            background: #1f2937;
+            border-radius: 9px;
+            overflow: hidden;
+            border: 1px solid #374151;
+        }
+        .queue-progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #22c55e 0%, #22d3ee 100%);
+            transition: width 0.25s ease;
+        }
+        .queue-progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 0.8em;
+            color: #0b0f1a;
+            font-weight: 700;
+        }
+        .queue-message {
+            font-size: 0.9em;
+            color: #cbd5e1;
+        }
+        .queue-status {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.8em;
+            font-weight: 700;
+        }
+        .status-queued { background: #1e3a8a; color: #bfdbfe; }
+        .status-processing { background: #0f766e; color: #ccfbf1; }
+        .status-error { background: #991b1b; color: #fecdd3; }
+        .queue-empty {
+            color: #94a3b8;
+            font-size: 0.95em;
+        }
     </style>
 </head>
 <body>
@@ -140,6 +224,11 @@
             <div class="exports-header">
                 <h1>📹 Video Exports</h1>
                 <p>Your saved video exports</p>
+            </div>
+            <div id="exportsQueueSection" class="exports-queue" style="display:none;">
+                <h2>🚧 In Progress</h2>
+                <div id="exportsQueueEmpty" class="queue-empty">No exports are currently running.</div>
+                <div id="exportsQueueList" class="queue-list"></div>
             </div>
             <div id="exportsGrid" class="exports-grid"></div>
             <div id="exportsEmpty" class="exports-empty" style="display: none;">

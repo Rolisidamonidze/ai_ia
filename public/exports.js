@@ -1,10 +1,16 @@
 // Exports page management
+import { createVideoFromItem } from '/modules/videoGenerator.js';
+
+const QUEUE_KEY = 'videoExportQueue';
+
+const getQueue = () => JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+const saveQueue = (queue) => localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+
 export async function loadExports() {
     try {
         const exportsGrid = document.getElementById('exportsGrid');
         const exportsEmpty = document.getElementById('exportsEmpty');
         
-        // Get exports from localStorage
         const exports = JSON.parse(localStorage.getItem('videoExports') || '[]');
         
         if (exports.length === 0) {
@@ -14,8 +20,9 @@ export async function loadExports() {
         }
         
         exportsGrid.innerHTML = '';
+        exportsGrid.style.display = 'grid';
+        exportsEmpty.style.display = 'none';
         
-        // Sort by date, newest first
         exports.sort((a, b) => b.timestamp - a.timestamp);
         
         exports.forEach(exportItem => {
@@ -123,5 +130,135 @@ export function deleteExport(id, cardElement) {
     }
 }
 
-// Load exports on page load
-document.addEventListener('DOMContentLoaded', loadExports);
+function renderQueue() {
+    const queueSection = document.getElementById('exportsQueueSection');
+    const queueList = document.getElementById('exportsQueueList');
+    const queueEmpty = document.getElementById('exportsQueueEmpty');
+    const queue = getQueue();
+    
+    if (!queueSection) return;
+    
+    if (!queue.length) {
+        queueSection.style.display = 'none';
+        queueList.innerHTML = '';
+        return;
+    }
+    
+    queueSection.style.display = 'block';
+    queueList.innerHTML = '';
+    queueEmpty.style.display = 'none';
+    
+    queue.sort((a, b) => b.createdAt - a.createdAt);
+    queue.forEach(job => {
+        const card = document.createElement('div');
+        card.className = 'queue-card';
+        
+        const title = document.createElement('div');
+        title.className = 'queue-card-title';
+        title.textContent = job.title;
+        card.appendChild(title);
+        
+        const meta = document.createElement('div');
+        meta.className = 'queue-card-meta';
+        const created = new Date(job.createdAt || Date.now());
+        meta.textContent = created.toLocaleTimeString();
+        const status = document.createElement('span');
+        status.className = `queue-status status-${job.status || 'queued'}`;
+        status.textContent = (job.status || 'queued').toUpperCase();
+        meta.appendChild(status);
+        card.appendChild(meta);
+        
+        const progress = document.createElement('div');
+        progress.className = 'queue-progress';
+        const fill = document.createElement('div');
+        fill.className = 'queue-progress-fill';
+        fill.style.width = `${job.progress || 0}%`;
+        const text = document.createElement('div');
+        text.className = 'queue-progress-text';
+        text.textContent = `${Math.round(job.progress || 0)}%`;
+        progress.appendChild(fill);
+        progress.appendChild(text);
+        card.appendChild(progress);
+        
+        const message = document.createElement('div');
+        message.className = 'queue-message';
+        message.textContent = job.message || 'Queued';
+        card.appendChild(message);
+        
+        queueList.appendChild(card);
+    });
+}
+
+let isProcessing = false;
+
+async function processQueue() {
+    if (isProcessing) return;
+    const queue = getQueue();
+    const activeJob = queue.find(j => j.status === 'processing') || queue.find(j => j.status === 'queued');
+    if (!activeJob) {
+        renderQueue();
+        return;
+    }
+    
+    isProcessing = true;
+    activeJob.status = 'processing';
+    activeJob.message = activeJob.message || 'Starting export...';
+    saveQueue(queue);
+    renderQueue();
+    
+    try {
+        // Ensure we have text content
+        let textContent = activeJob.text || '';
+        if (!textContent && activeJob.textUrl) {
+            const textResponse = await fetch(activeJob.textUrl);
+            textContent = await textResponse.text();
+        }
+        
+        const item = {
+            name: activeJob.title,
+            text: textContent,
+            audioFile: activeJob.audioFile,
+            audioUrl: activeJob.audioUrl,
+            textUrl: activeJob.textUrl
+        };
+        
+        const onProgress = ({ progress, message }) => {
+            const updated = getQueue();
+            const jobIdx = updated.findIndex(j => j.id === activeJob.id);
+            if (jobIdx === -1) return;
+            updated[jobIdx].progress = Math.round(progress || 0);
+            updated[jobIdx].message = message || 'Working...';
+            updated[jobIdx].status = 'processing';
+            saveQueue(updated);
+            renderQueue();
+        };
+        
+        const videoBlob = await createVideoFromItem(item, activeJob.options || {}, onProgress);
+        saveExport(videoBlob, activeJob.title);
+        
+        const updated = getQueue().filter(j => j.id !== activeJob.id);
+        saveQueue(updated);
+        await loadExports();
+    } catch (error) {
+        console.error('Export job failed:', error);
+        const updated = getQueue();
+        const jobIdx = updated.findIndex(j => j.id === activeJob.id);
+        if (jobIdx !== -1) {
+            updated[jobIdx].status = 'error';
+            updated[jobIdx].message = error.message || 'Failed to export';
+            saveQueue(updated);
+        }
+    } finally {
+        isProcessing = false;
+        renderQueue();
+        setTimeout(processQueue, 300);
+    }
+}
+
+function initExportsPage() {
+    loadExports();
+    renderQueue();
+    processQueue();
+}
+
+document.addEventListener('DOMContentLoaded', initExportsPage);
