@@ -9,7 +9,10 @@
     "rewrites": [
       {
         "source": "/api/**",
-        "function": "app"
+        "function": {
+          "functionId": "app",
+          "region": "us-central1"
+        }
       },
       {
         "source": "**",
