@@ -417,6 +417,31 @@ app.post('/api/save-item', async (req, res) => {
   }
 });
 
+// Helper function to convert storage URLs to proxy URLs
+function toProxyUrl(url) {
+  if (!url) return url;
+  
+  // Extract file path from Firebase Storage URLs
+  if (url.includes('firebasestorage.googleapis.com')) {
+    const match = url.match(/\/o\/([^?]+)/);
+    if (match) {
+      const filePath = decodeURIComponent(match[1]);
+      return `/api/storage/${filePath}`;
+    }
+  }
+  
+  // Extract from googleapis.com URLs
+  if (url.includes('storage.googleapis.com')) {
+    const match = url.match(/storage\.googleapis\.com\/[^/]+\/(.+)$/);
+    if (match) {
+      return `/api/storage/${match[1]}`;
+    }
+  }
+  
+  // Already a proxy URL or local path
+  return url;
+}
+
 // Get saved items list
 app.get('/api/saved-items', async (req, res) => {
   try {
@@ -432,8 +457,8 @@ app.get('/api/saved-items', async (req, res) => {
           name: data.name,
           timestamp: data.timestamp,
           date: data.date,
-          textUrl: data.textUrl,
-          audioUrl: data.audioUrl,
+          textUrl: toProxyUrl(data.textUrl),
+          audioUrl: toProxyUrl(data.audioUrl),
           playlist: data.playlist || 'default'
         });
       });
@@ -497,8 +522,8 @@ app.get('/api/playlists', async (req, res) => {
           name: data.name,
           timestamp: data.timestamp,
           date: data.date,
-          textUrl: data.textUrl,
-          audioUrl: data.audioUrl,
+          textUrl: toProxyUrl(data.textUrl),
+          audioUrl: toProxyUrl(data.audioUrl),
           playlist: playlistName
         });
       });
@@ -689,50 +714,60 @@ app.patch('/api/saved-item/:itemId/playlist', async (req, res) => {
   }
 });
 
-// Proxy endpoint for Firebase Storage files to handle CORS
-app.get('/api/storage-proxy', async (req, res) => {
+// General proxy endpoint for Firebase Storage files
+app.get('/api/storage/:path(*)', async (req, res) => {
   try {
-    const { url } = req.query;
+    const filePath = req.params.path;
     
-    if (!url) {
-      return res.status(400).json({ error: 'URL parameter is required' });
+    if (!filePath) {
+      return res.status(400).json({ error: 'File path is required' });
     }
     
-    console.log('Proxying storage file:', url);
+    console.log('Proxying storage file:', filePath);
     
-    // Fetch the file from Firebase Storage
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      console.error('Storage fetch failed:', response.status, response.statusText);
-      return res.status(response.status).json({ 
-        error: 'Failed to fetch file from storage',
-        status: response.status 
+    if (bucket) {
+      // Serve directly from Firebase Storage bucket
+      const file = bucket.file(filePath);
+      const [exists] = await file.exists();
+      
+      if (!exists) {
+        return res.status(404).json({ error: 'File not found' });
+      }
+      
+      // Get file metadata for content type
+      const [metadata] = await file.getMetadata();
+      const contentType = metadata.contentType || 'application/octet-stream';
+      
+      // Set proper headers
+      res.set({
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=31536000'
       });
+      
+      // Stream file to response
+      file.createReadStream()
+        .on('error', (error) => {
+          console.error('Stream error:', error);
+          if (!res.headersSent) {
+            res.status(500).json({ error: 'Failed to stream file' });
+          }
+        })
+        .pipe(res);
+        
+    } else {
+      // Fallback for local storage
+      const localPath = path.join(SAVED_ITEMS_DIR, path.basename(filePath));
+      res.sendFile(localPath);
     }
-    
-    // Get content type from storage response
-    const contentType = response.headers.get('content-type') || 'application/octet-stream';
-    
-    // Set proper CORS and content headers
-    res.set({
-      'Content-Type': contentType,
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-      'Cache-Control': 'public, max-age=31536000'
-    });
-    
-    // Stream the file to response
-    const buffer = await response.arrayBuffer();
-    res.send(Buffer.from(buffer));
     
   } catch (error) {
     console.error('Storage proxy error:', error);
-    res.status(500).json({ 
-      error: 'Failed to proxy storage file', 
-      message: error.message 
-    });
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: 'Failed to proxy storage file', 
+        message: error.message 
+      });
+    }
   }
 });
 

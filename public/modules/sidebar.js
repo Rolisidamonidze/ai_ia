@@ -253,19 +253,11 @@ async function playItem(item, { apiForm, status, backBtn, downloadLink }) {
         var textDownload = document.getElementById('downloadTextLink');
         if (textDownload) textDownload.style.display = 'none';
         
-        // Load text and audio through proxy to avoid CORS issues
-        const textUrl = item.textUrl.includes('firebasestorage.googleapis.com') || item.textUrl.includes('storage.googleapis.com') 
-            ? `/api/storage-proxy?url=${encodeURIComponent(item.textUrl)}`
-            : item.textUrl;
-        
-        const audioUrl = item.audioUrl.includes('firebasestorage.googleapis.com') || item.audioUrl.includes('storage.googleapis.com')
-            ? `/api/storage-proxy?url=${encodeURIComponent(item.audioUrl)}`
-            : item.audioUrl;
-        
-        const textResponse = await fetch(textUrl);
+        // URLs are already proxied by the server
+        const textResponse = await fetch(item.textUrl);
         const text = await textResponse.text();
         
-        const audioResponse = await fetch(audioUrl);
+        const audioResponse = await fetch(item.audioUrl);
         const audioBlob = await audioResponse.blob();
         
         // Play with word timings
