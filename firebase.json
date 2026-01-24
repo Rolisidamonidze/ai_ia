@@ -28,7 +28,9 @@
         "firebase-debug.log",
         "firebase-debug.*.log",
         "saved-items",
-        "public"
+        "public",
+        ".env",
+        ".env.*"
       ]
     }
   ],
