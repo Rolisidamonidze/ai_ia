@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ChatGPT Video Assembler</title>
+    <title>AI-IA - Transform Ideas into Audio-Visual Content</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd/ffmpeg.js"></script>
     <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
@@ -12,9 +12,11 @@
     <div class="sidebar" id="sidebar"></div>
     <div class="main-content">
         <div class="container">
+            <h1 style="text-align: center; margin-bottom: 10px; font-size: 2em;">AI-IA</h1>
+            <p style="text-align: center; color: #666; margin-bottom: 30px; font-size: 0.95em;">Transform your ideas into narrated videos with AI</p>
             <form id="apiForm">
-                <label for="prompt">Prompt:</label>
-                <textarea id="prompt" rows="4" required placeholder="Enter your prompt to generate text and audio..."></textarea>
+                <label for="prompt">What would you like to create?</label>
+                <textarea id="prompt" rows="4" required placeholder="Try: 'Explain photosynthesis in simple terms' or 'Write a short bedtime story about space'..."></textarea>
                 
                 <label for="voiceSelect">Voice:</label>
                 <select id="voiceSelect">
